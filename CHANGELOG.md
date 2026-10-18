@@ -7,6 +7,7 @@ All notable changes are documented here.
 ## Unreleased
 
 - Add an opt-in automatic transition from In progress to Review after Paseo reports a successful Agent turn completion, with a configurable Review destination.
+- Add independent enable controls and delays for Done and Canceled automatic archive, with per-state due counts and a compatibility fallback for the former shared delay.
 
 ## 0.3.0 — 2026-10-13
 
