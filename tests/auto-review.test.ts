@@ -156,6 +156,28 @@ it("moves when the owning tab completes while a sibling tab is still running", a
   }
 });
 
+it("does not treat a provider child as a tab when choosing the owner", async () => {
+  const test = reviewFixture();
+  test.inventory.agents.push({
+    id: "agent/provider/child",
+    workspaceId: "w",
+    parentAgentId: "agent",
+    subagentId: "child",
+    title: "Child",
+    updatedAt: "2026-09-23T05:00:00Z",
+    lastUserMessageAt: null,
+    activity: "idle",
+  });
+  try {
+    await test.board.start();
+    test.completeTurn("w", "agent");
+    await test.board.refresh();
+    expect(test.board.snapshot().cards[0].stage).toBe("review");
+  } finally {
+    test.board.dispose();
+  }
+});
+
 it("moves past a historical error once a newer Agent is healthy", async () => {
   const test = reviewFixture();
   test.inventory.agents.push({

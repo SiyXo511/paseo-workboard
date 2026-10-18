@@ -98,10 +98,11 @@ function workspaceActivity(
  * addressed stands in for it: a workspace's card follows the conversation being used.
  */
 function latestTab(agents: readonly Agent[]): Agent | undefined {
-  const addressed = agents.filter((agent) =>
+  const tabs = agents.filter((agent) => !agent.parentAgentId);
+  const addressed = tabs.filter((agent) =>
     Number.isFinite(Date.parse(agent.lastUserMessageAt ?? "")),
   );
-  const pool = addressed.length ? addressed : agents;
+  const pool = addressed.length ? addressed : tabs;
   let latest: Agent | undefined;
   let latestTime = -Infinity;
   for (const agent of pool) {
