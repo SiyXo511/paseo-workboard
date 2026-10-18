@@ -109,6 +109,47 @@ it("waits for an active Agent and moves after it settles without another complet
   }
 });
 
+it("moves past a historical error once a newer Agent is healthy", async () => {
+  const test = reviewFixture();
+  test.inventory.agents.push({
+    id: "older-error",
+    workspaceId: "w",
+    title: null,
+    updatedAt: "2026-09-22T00:00:00Z",
+    lastUserMessageAt: null,
+    activity: "error",
+  });
+  try {
+    await test.board.start();
+    test.turnCompletions.add("w");
+    await test.board.refresh();
+    expect(test.board.snapshot().cards[0].stage).toBe("review");
+  } finally {
+    test.board.dispose();
+  }
+});
+
+it("still refuses while the newest Agent activity is an error", async () => {
+  const test = reviewFixture();
+  test.inventory.agents.push({
+    id: "current-error",
+    workspaceId: "w",
+    title: null,
+    updatedAt: "2026-09-23T01:00:00Z",
+    lastUserMessageAt: null,
+    activity: "error",
+  });
+  try {
+    await test.board.start();
+    test.turnCompletions.add("w");
+    await test.board.refresh();
+    expect(test.board.snapshot().cards[0].stage).toBe("in-progress");
+    expect(test.host.setLabel).not.toHaveBeenCalled();
+  } finally {
+    test.board.dispose();
+  }
+});
+
 it("does not replay a completion after the switch is enabled later", async () => {
   const test = reviewFixture({ autoMoveInProgressToReview: false });
   try {

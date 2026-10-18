@@ -1427,17 +1427,14 @@ export class Workboard {
         this.pendingReviewTurns.delete(workspaceId);
         continue;
       }
-      if (agents.some((agent) => agent.activity === "error")) {
+      // Judge the workspace by the same current-activity projection the card shows, so a
+      // recovered historical error cannot block Review forever while a live failure still does.
+      const activity = workspaceActivity(agents);
+      if (activity === "error") {
         this.pendingReviewTurns.delete(workspaceId);
         continue;
       }
-      if (
-        agents.some(
-          (agent) =>
-            agent.activity === "running" || agent.activity === "waiting",
-        )
-      )
-        continue;
+      if (activity === "running" || activity === "waiting") continue;
       try {
         const next = await this.transition(
           workspaceId,

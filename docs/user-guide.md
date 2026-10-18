@@ -10,7 +10,7 @@ A draft is a task without a workspace. Create it with a title to capture work fo
 
 Task status is a business decision. Agent states such as running, waiting for input, or error are shown separately. Ending an Agent session never marks a task done.
 
-An optional, off-by-default setting can move a task from an In progress group to Review after a successful Agent turn completes. The server consumes Paseo's `turn_completed` Agent event and moves only when no non-archived Agent in that workspace is still running, waiting for permission/input, or failed. Failed, canceled, and ambiguous label states are left unchanged. The setting does not sweep existing idle tasks when it is enabled or when Workboard starts, and it never moves directly to Done.
+An optional, off-by-default setting can move a task from an In progress group to Review after a successful Agent turn completes. The server consumes Paseo's `turn_completed` Agent event and moves only when no non-archived Agent in that workspace is still running or waiting for permission/input, and the workspace's current activity is not a failure. An error from an Agent older than newer healthy activity in the same workspace is historical and does not block the move. Failed, canceled, and ambiguous label states are left unchanged. The setting does not sweep existing idle tasks when it is enabled or when Workboard starts, and it never moves directly to Done.
 
 ## Work with tasks
 
