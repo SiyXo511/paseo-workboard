@@ -90,6 +90,8 @@ export interface Inventory {
 export interface TurnCompletion {
   workspaceId: string;
   agentId: string;
+  /** `finished` carries unread output; `read` means the user has looked at it. */
+  kind: "finished" | "read";
 }
 export interface Host {
   identity: { serverId: string; version: string };
@@ -235,6 +237,7 @@ export class PaseoHost implements Host {
         this.turnCompletions.set(`${workspaceId}\u0000${agentId}`, {
           workspaceId,
           agentId,
+          kind: "finished",
         });
         this.changed(workspaceId);
       }
@@ -259,11 +262,15 @@ export class PaseoHost implements Host {
     const previous = this.lastActivity.get(agent.id);
     this.lastActivity.set(agent.id, agent.activity);
     if (!previous || !agent.workspaceId || agent.archivedAt) return;
-    if (previous !== "running" && previous !== "waiting") return;
-    if (agent.activity !== "idle" && agent.activity !== "attention") return;
+    const finished =
+      (previous === "running" || previous === "waiting") &&
+      agent.activity === "attention";
+    const read = previous === "attention" && agent.activity === "idle";
+    if (!finished && !read) return;
     this.turnCompletions.set(`${agent.workspaceId}\u0000${agent.id}`, {
       workspaceId: agent.workspaceId,
       agentId: agent.id,
+      kind: finished ? "finished" : "read",
     });
   }
   async inventory(): Promise<Inventory> {

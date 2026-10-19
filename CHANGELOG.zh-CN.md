@@ -12,6 +12,7 @@ English: [English](CHANGELOG.md)
 - 自动进入待验收不再被已被新活动覆盖的历史 Agent 错误阻塞，恢复后的 workspace 仍可正常进入待验收。
 - 自动进入待验收跟随最近使用的标签：同一 workspace 的其它标签既不会误触发，也不会阻塞移动。
 - 待验收自动化改用 agents 订阅里的“运行→空闲”转变触发，因为 Paseo 只把 `turn_completed` 发给 timeline 订阅者。
+- 自动化改为跟随 Paseo 持久化的未读状态：结束时未读则进入待验收，读完后回到待开始。
 
 ## 0.3.0 — 2026-10-13
 

@@ -23,7 +23,7 @@ function reviewFixture(
     title: null,
     updatedAt: "2026-09-23T00:00:00Z",
     lastUserMessageAt: null,
-    activity: "idle",
+    activity: "attention",
   });
   return test;
 }
@@ -63,7 +63,7 @@ it("moves an In progress workspace to Review after a successful turn event", asy
   }
 });
 
-it("does not move idle history merely because the setting or daemon starts", async () => {
+it("does not move unread history merely because the setting or daemon starts", async () => {
   const test = reviewFixture();
   try {
     await test.board.start();
@@ -101,7 +101,7 @@ it("waits for an active Agent and moves after it settles without another complet
     await test.board.refresh();
     expect(test.board.snapshot().cards[0].stage).toBe("in-progress");
 
-    test.inventory.agents[0].activity = "idle";
+    test.inventory.agents[0].activity = "attention";
     await test.board.refresh();
     expect(test.board.snapshot().cards[0].stage).toBe("review");
   } finally {
@@ -173,6 +173,57 @@ it("does not treat a provider child as a tab when choosing the owner", async () 
     test.completeTurn("w", "agent");
     await test.board.refresh();
     expect(test.board.snapshot().cards[0].stage).toBe("review");
+  } finally {
+    test.board.dispose();
+  }
+});
+
+it("keeps finished work that was already read in In progress", async () => {
+  const test = reviewFixture();
+  test.inventory.agents[0].activity = "idle";
+  try {
+    await test.board.start();
+    test.completeTurn("w");
+    await test.board.refresh();
+    expect(test.board.snapshot().cards[0].stage).toBe("in-progress");
+    expect(test.host.setLabel).not.toHaveBeenCalled();
+  } finally {
+    test.board.dispose();
+  }
+});
+
+it("returns a Review task to To do when its owner reads the unread output", async () => {
+  const test = reviewFixture();
+  test.inventory.workspaces[0].labels = ["task:review"];
+  try {
+    await test.board.start();
+    expect(test.board.snapshot().cards[0].stage).toBe("review");
+
+    test.inventory.agents[0].activity = "idle";
+    test.completeTurn("w", "agent", "read");
+    await test.board.refresh();
+
+    expect(test.host.setLabel).toHaveBeenCalledWith(
+      "w",
+      "task:todo",
+      "sky",
+      true,
+    );
+    expect(test.board.snapshot().cards[0].stage).toBe("todo");
+  } finally {
+    test.board.dispose();
+  }
+});
+
+it("ignores a read event while the task is not in Review", async () => {
+  const test = reviewFixture();
+  test.inventory.agents[0].activity = "idle";
+  try {
+    await test.board.start();
+    test.completeTurn("w", "agent", "read");
+    await test.board.refresh();
+    expect(test.board.snapshot().cards[0].stage).toBe("in-progress");
+    expect(test.host.setLabel).not.toHaveBeenCalled();
   } finally {
     test.board.dispose();
   }

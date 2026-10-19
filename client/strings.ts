@@ -169,9 +169,9 @@ const zh = {
   archiveDraftConfirm:
     "归档草稿“{name}”？归档后将移出看板，可在归档页放回原分组。",
   autoArchive: "自动归档",
-  autoMoveInProgressToReview: "Agent 完成回合后自动移入待验收",
+  autoMoveInProgressToReview: "按未读状态自动移入待验收",
   autoMoveInProgressToReviewHint:
-    "仅当任务位于进行中类型分组，且没有 Agent 仍在运行、等待权限或报错时移动。只进入待验收，不会标记为已完成。",
+    "归属标签结束且留下未读输出时移入待验收；你真正查看后，仍在待验收的任务回到待开始。运行中保持进行中，报错不动。",
   autoArchiveMigrationPaused:
     "升级时补建了已废弃分组，其标签可能匹配已有 workspace。自动归档已关闭，请核对到期任务后重新开启；存在到期任务时会先要求确认。",
   archiveCanceled: "自动归档已废弃任务",
@@ -285,6 +285,7 @@ const zh = {
     "changed-during-check": "检查期间状态已变化",
     "label-sync-incomplete": "标签同步未完成",
     "auto-review-failed": "自动移入待验收失败，请检查 workspace 标签",
+    "auto-read-failed": "自动移回待开始失败，请检查 workspace 标签",
     "workspace-unavailable": "workspace 不可用或正在归档",
     "archive-restored-workspace-unavailable":
       "任务已放回看板，但 workspace 不在宿主活跃清单中；请核实原生状态",
@@ -598,9 +599,9 @@ const en: typeof zh = {
     "Archive draft “{name}”? It will leave the board. You can restore it to its original group from Archive.",
   autoArchive: "Automatic archive",
   autoMoveInProgressToReview:
-    "Move In progress tasks to Review after an Agent turn completes",
+    "Move In progress tasks to Review while their output is unread",
   autoMoveInProgressToReviewHint:
-    "Moves only when the task is in an In progress group and no Agent is still running, waiting for permission, or failed. It moves to Review, never directly to Done.",
+    "The owning tab finishing with unread output moves the task to Review; viewing that output returns a Review task to To do. A running tab keeps it In progress, and failures leave it alone.",
   autoArchiveMigrationPaused:
     "An upgrade added a Canceled group whose label may match existing workspaces. Automatic archive was turned off. Review due tasks before re-enabling it; due tasks require confirmation first.",
   archiveCanceled: "Automatically archive Canceled tasks",
@@ -723,6 +724,8 @@ const en: typeof zh = {
     "label-sync-incomplete": "Label sync is incomplete",
     "auto-review-failed":
       "Automatic Review failed; verify the workspace labels",
+    "auto-read-failed":
+      "Automatic return to To do failed; verify the workspace labels",
     "workspace-unavailable": "Workspace is unavailable or archiving",
     "archive-restored-workspace-unavailable":
       "Task restored to board, but the workspace is absent from the host active list; verify its native state",

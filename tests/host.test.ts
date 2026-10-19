@@ -276,7 +276,7 @@ it("queues only successful turn completions for their workspace", async () => {
     stream("turn_completed");
     expect(changed).toHaveBeenLastCalledWith("w1");
     expect(host.takeTurnCompletions()).toEqual([
-      { workspaceId: "w1", agentId: "parent" },
+      { workspaceId: "w1", agentId: "parent", kind: "finished" },
     ]);
     expect(host.takeTurnCompletions()).toEqual([]);
   } finally {
@@ -284,7 +284,7 @@ it("queues only successful turn completions for their workspace", async () => {
   }
 });
 
-it("queues a completion when an Agent settles from running to idle", async () => {
+it("queues a finished completion when an Agent settles unread", async () => {
   const changed = vi.fn();
   const observers: SubscriptionObserver<unknown>[] = [];
   const host = providerHost(
@@ -311,11 +311,55 @@ it("queues a completion when an Agent settles from running to idle", async () =>
 
     upsert({ status: "running", activeTurn: { id: "turn" } });
     expect(host.takeTurnCompletions()).toEqual([]);
-    upsert({ status: "idle" });
+    upsert({
+      status: "idle",
+      requiresAttention: true,
+      attentionReason: "finished",
+    });
     expect(host.takeTurnCompletions()).toEqual([
-      { workspaceId: "w1", agentId: "parent" },
+      { workspaceId: "w1", agentId: "parent", kind: "finished" },
     ]);
     expect(host.takeTurnCompletions()).toEqual([]);
+  } finally {
+    host.dispose();
+  }
+});
+
+it("queues a read completion when the unread attention clears", async () => {
+  const observers: SubscriptionObserver<unknown>[] = [];
+  const host = providerHost(
+    parentAgent,
+    { subagents: async () => [] } as unknown as PaseoCompat,
+    vi.fn(),
+    observers,
+  );
+  try {
+    await host.inventory();
+    const upsert = (patch: Record<string, unknown>) =>
+      observers[1].update({
+        type: "agent_update",
+        payload: {
+          kind: "upsert",
+          agent: {
+            ...parentAgent,
+            updatedAt: "2026-08-03T00:00:01.000Z",
+            ...patch,
+          },
+        },
+      } as unknown as Parameters<SubscriptionObserver<unknown>["update"]>[0]);
+    upsert({ status: "running", activeTurn: { id: "turn" } });
+    upsert({
+      status: "idle",
+      requiresAttention: true,
+      attentionReason: "finished",
+    });
+    expect(host.takeTurnCompletions()).toEqual([
+      { workspaceId: "w1", agentId: "parent", kind: "finished" },
+    ]);
+    upsert({ status: "idle", requiresAttention: false, attentionReason: null });
+    expect(host.takeTurnCompletions()).toEqual([
+      { workspaceId: "w1", agentId: "parent", kind: "read" },
+    ]);
   } finally {
     host.dispose();
   }

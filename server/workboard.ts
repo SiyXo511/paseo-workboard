@@ -168,6 +168,7 @@ export class Workboard {
     }
   >();
   private pendingReviewTurns = new Map<string, string>();
+  private pendingReadTurns = new Map<string, string>();
   private connected = false;
   private error: string | null = "Workboard is starting";
   private refreshedAt: string | null = null;
@@ -220,9 +221,9 @@ export class Workboard {
       for (const task of bindings)
         this.bindingInFlight.delete(task.binding!.operationId);
       await this.reconcile();
-      for (const completion of this.host.takeTurnCompletions())
-        this.pendingReviewTurns.set(completion.workspaceId, completion.agentId);
+      this.queueCompletions();
       await this.autoReviewCompletedTurns();
+      await this.autoReturnReadTurns();
       await this.scan();
     });
     if (!this.stopped)
@@ -252,12 +253,9 @@ export class Workboard {
       try {
         if (!this.connected) await this.load();
         await this.reconcile(scope);
-        for (const completion of this.host.takeTurnCompletions())
-          this.pendingReviewTurns.set(
-            completion.workspaceId,
-            completion.agentId,
-          );
+        this.queueCompletions();
         await this.autoReviewCompletedTurns();
+        await this.autoReturnReadTurns();
         await this.scan(scope);
       } catch (error) {
         this.connected = false;
@@ -1403,6 +1401,15 @@ export class Workboard {
       if (task) task.issue = issue;
     });
   }
+  private queueCompletions(): void {
+    for (const completion of this.host.takeTurnCompletions()) {
+      const pending =
+        completion.kind === "read"
+          ? this.pendingReadTurns
+          : this.pendingReviewTurns;
+      pending.set(completion.workspaceId, completion.agentId);
+    }
+  }
   private async autoReviewCompletedTurns(): Promise<void> {
     const settings = this.store.current.settings;
     if (!this.pendingReviewTurns.size) return;
@@ -1461,12 +1468,13 @@ export class Workboard {
         this.pendingReviewTurns.delete(workspaceId);
         continue;
       }
-      if (owner.activity === "error") {
+      if (owner.activity === "running" || owner.activity === "waiting")
+        continue;
+      // Finished but already read (attention cleared), or failed: nothing to review.
+      if (owner.activity !== "attention") {
         this.pendingReviewTurns.delete(workspaceId);
         continue;
       }
-      if (owner.activity === "running" || owner.activity === "waiting")
-        continue;
       try {
         const next = await this.transition(
           workspaceId,
@@ -1490,6 +1498,73 @@ export class Workboard {
         await this.issue(task.id, "auto-review-failed");
       }
       this.pendingReviewTurns.delete(workspaceId);
+    }
+  }
+  private async autoReturnReadTurns(): Promise<void> {
+    const settings = this.store.current.settings;
+    if (!this.pendingReadTurns.size) return;
+    if (!settings.autoMoveInProgressToReview) {
+      this.pendingReadTurns.clear();
+      return;
+    }
+    const target = defaultGroup(settings.groups, settings.defaultDraftGroup);
+    for (const [workspaceId, readAgentId] of [...this.pendingReadTurns]) {
+      const workspace = this.inventory.workspaces.find(
+        (candidate) => candidate.id === workspaceId,
+      );
+      const task = this.store.current.tasks.find(
+        (candidate) => candidate.workspaceId === workspaceId,
+      );
+      if (
+        !workspace ||
+        !task ||
+        workspace.archivingAt ||
+        task.archived ||
+        task.binding
+      ) {
+        this.pendingReadTurns.delete(workspaceId);
+        continue;
+      }
+      const stage = resolveStage(
+        workspace.labels,
+        settings.groups,
+        settings.defaultStartGroup,
+      );
+      if (groupKind(stage, settings.groups) !== "review") {
+        this.pendingReadTurns.delete(workspaceId);
+        continue;
+      }
+      const agents = this.inventory.agents.filter(
+        (agent) => agent.workspaceId === workspaceId && !agent.archivedAt,
+      );
+      const owner = latestTab(agents);
+      if (!owner || owner.id !== readAgentId || owner.activity !== "idle") {
+        this.pendingReadTurns.delete(workspaceId);
+        continue;
+      }
+      try {
+        const next = await this.transition(
+          workspaceId,
+          target,
+          statusLabels(workspace.labels, settings.groups),
+        );
+        this.inventory.workspaces = this.inventory.workspaces.map(
+          (candidate) => (candidate.id === workspaceId ? next : candidate),
+        );
+        await this.store.update((data) => {
+          const current = data.tasks.find(
+            (candidate) => candidate.id === task.id,
+          );
+          if (!current) return;
+          current.lastStage = target;
+          current.updatedAt = this.stamp(current.updatedAt);
+          if (current.issue === "auto-read-failed") current.issue = null;
+        });
+        this.changed(workspaceId);
+      } catch {
+        await this.issue(task.id, "auto-read-failed");
+      }
+      this.pendingReadTurns.delete(workspaceId);
     }
   }
   private archiveFingerprint(

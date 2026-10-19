@@ -19,6 +19,7 @@ const attentionIssues = new Set([
   "labels-conflict",
   "label-sync-incomplete",
   "auto-review-failed",
+  "auto-read-failed",
   "native-archive-unknown",
   "conversation-unknown",
   "terminal-open",

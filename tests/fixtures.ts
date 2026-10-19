@@ -102,7 +102,11 @@ export function fixture(initial: Partial<Data> = {}) {
     now,
     turnCompletions,
     /** Queue one completed turn, defaulting to the workspace's most recently updated tab. */
-    completeTurn(workspaceId: string, agentId?: string) {
+    completeTurn(
+      workspaceId: string,
+      agentId?: string,
+      kind: TurnCompletion["kind"] = "finished",
+    ) {
       const agents = inventory.agents.filter(
         (agent) => agent.workspaceId === workspaceId && !agent.archivedAt,
       );
@@ -113,7 +117,7 @@ export function fixture(initial: Partial<Data> = {}) {
           .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))[0]
           ?.id;
       if (!chosen) throw new Error(`No Agent in workspace ${workspaceId}`);
-      turnCompletions.push({ workspaceId, agentId: chosen });
+      turnCompletions.push({ workspaceId, agentId: chosen, kind });
     },
   };
 }
