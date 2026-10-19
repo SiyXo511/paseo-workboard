@@ -109,25 +109,20 @@ it("waits for an active Agent and moves after it settles without another complet
   }
 });
 
-it("ignores a completion from a tab that is not the most recently used", async () => {
+it("moves when any tab in the workspace finishes unread", async () => {
   const test = reviewFixture();
-  test.inventory.agents[0].lastUserMessageAt = "2026-09-23T00:00:00Z";
+  test.inventory.agents[0].activity = "idle";
   test.inventory.agents.push({
     id: "experiment",
     workspaceId: "w",
     title: "Experiment",
     updatedAt: "2026-09-23T02:00:00Z",
     lastUserMessageAt: "2026-09-22T00:00:00Z",
-    activity: "idle",
+    activity: "attention",
   });
   try {
     await test.board.start();
     test.completeTurn("w", "experiment");
-    await test.board.refresh();
-    expect(test.board.snapshot().cards[0].stage).toBe("in-progress");
-    expect(test.host.setLabel).not.toHaveBeenCalled();
-
-    test.completeTurn("w", "agent");
     await test.board.refresh();
     expect(test.board.snapshot().cards[0].stage).toBe("review");
   } finally {
@@ -135,9 +130,8 @@ it("ignores a completion from a tab that is not the most recently used", async (
   }
 });
 
-it("moves when the owning tab completes while a sibling tab is still running", async () => {
+it("waits while any tab in the workspace is still running", async () => {
   const test = reviewFixture();
-  test.inventory.agents[0].lastUserMessageAt = "2026-09-23T00:00:00Z";
   test.inventory.agents.push({
     id: "sibling",
     workspaceId: "w",
@@ -150,13 +144,17 @@ it("moves when the owning tab completes while a sibling tab is still running", a
     await test.board.start();
     test.completeTurn("w", "agent");
     await test.board.refresh();
+    expect(test.board.snapshot().cards[0].stage).toBe("in-progress");
+
+    test.inventory.agents[1].activity = "idle";
+    await test.board.refresh();
     expect(test.board.snapshot().cards[0].stage).toBe("review");
   } finally {
     test.board.dispose();
   }
 });
 
-it("does not treat a provider child as a tab when choosing the owner", async () => {
+it("does not count provider children as workspace activity", async () => {
   const test = reviewFixture();
   test.inventory.agents.push({
     id: "agent/provider/child",
@@ -166,7 +164,7 @@ it("does not treat a provider child as a tab when choosing the owner", async () 
     title: "Child",
     updatedAt: "2026-09-23T05:00:00Z",
     lastUserMessageAt: null,
-    activity: "idle",
+    activity: "running",
   });
   try {
     await test.board.start();
@@ -192,7 +190,7 @@ it("keeps finished work that was already read in In progress", async () => {
   }
 });
 
-it("moves a To do task into In progress when its owner starts running", async () => {
+it("moves a To do task into In progress when a tab starts running", async () => {
   const test = reviewFixture();
   test.inventory.workspaces[0].labels = ["task:todo"];
   test.inventory.agents[0].activity = "idle";
@@ -228,7 +226,7 @@ it("reconciles a To do task whose owner was already running at startup", async (
   }
 });
 
-it("returns a Review task to To do when its owner reads the unread output", async () => {
+it("returns a Review task to To do once the unread output is read", async () => {
   const test = reviewFixture();
   test.inventory.workspaces[0].labels = ["task:review"];
   try {
@@ -246,6 +244,29 @@ it("returns a Review task to To do when its owner reads the unread output", asyn
       true,
     );
     expect(test.board.snapshot().cards[0].stage).toBe("todo");
+  } finally {
+    test.board.dispose();
+  }
+});
+
+it("keeps Review while another tab still has unread output", async () => {
+  const test = reviewFixture();
+  test.inventory.workspaces[0].labels = ["task:review"];
+  test.inventory.agents[0].activity = "idle";
+  test.inventory.agents.push({
+    id: "sibling",
+    workspaceId: "w",
+    title: "Sibling",
+    updatedAt: "2026-09-23T03:00:00Z",
+    lastUserMessageAt: "2026-09-22T00:00:00Z",
+    activity: "attention",
+  });
+  try {
+    await test.board.start();
+    test.completeTurn("w", "agent", "read");
+    await test.board.refresh();
+    expect(test.board.snapshot().cards[0].stage).toBe("review");
+    expect(test.host.setLabel).not.toHaveBeenCalled();
   } finally {
     test.board.dispose();
   }
@@ -285,8 +306,9 @@ it("moves past a historical error once a newer Agent is healthy", async () => {
   }
 });
 
-it("still refuses while the newest Agent activity is an error", async () => {
+it("does not move when no tab has unread output", async () => {
   const test = reviewFixture();
+  test.inventory.agents[0].activity = "idle";
   test.inventory.agents.push({
     id: "current-error",
     workspaceId: "w",

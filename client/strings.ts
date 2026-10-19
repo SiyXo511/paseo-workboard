@@ -171,7 +171,7 @@ const zh = {
   autoArchive: "自动归档",
   autoMoveInProgressToReview: "按未读状态自动移入待验收",
   autoMoveInProgressToReviewHint:
-    "归属标签开始运行时，待开始任务进入进行中；结束且留下未读输出时移入待验收；你真正查看后，仍在待验收的任务回到待开始。报错不动。",
+    "任一标签开始运行时，待开始任务进入进行中；只要还有标签在运行就保持进行中；整个 workspace 结束且留下未读时移入待验收，未读全部看过后回到待开始。报错不动。",
   autoArchiveMigrationPaused:
     "升级时补建了已废弃分组，其标签可能匹配已有 workspace。自动归档已关闭，请核对到期任务后重新开启；存在到期任务时会先要求确认。",
   archiveCanceled: "自动归档已废弃任务",
@@ -601,7 +601,7 @@ const en: typeof zh = {
   autoMoveInProgressToReview:
     "Move In progress tasks to Review while their output is unread",
   autoMoveInProgressToReviewHint:
-    "Starting a turn moves a To do task to In progress; finishing with unread output moves it to Review, and viewing that output returns it to To do. Failures leave the card alone.",
+    "Any tab starting a turn moves a To do task to In progress and keeps it there while a tab runs. When the workspace finishes with unread output it moves to Review; viewing that output returns it to To do. Failures leave the card alone.",
   autoArchiveMigrationPaused:
     "An upgrade added a Canceled group whose label may match existing workspaces. Automatic archive was turned off. Review due tasks before re-enabling it; due tasks require confirmation first.",
   archiveCanceled: "Automatically archive Canceled tasks",

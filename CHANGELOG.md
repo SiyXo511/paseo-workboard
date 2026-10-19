@@ -14,6 +14,7 @@ All notable changes are documented here.
 - Trigger the Review automation from the agents subscription's running-to-idle transition, because Paseo streams `turn_completed` only to timeline subscribers.
 - Tie the automation to Paseo's persisted unread state: an unread finish moves the task to Review, and reading that output moves it back to To do.
 - Move a To do task into In progress when its owning tab starts running, closing the loop with the Review and read transitions.
+- Keep cards workspace-scoped: any running tab keeps the workspace In progress, and Review waits until every tab has stopped and all unread output is read.
 
 ## 0.3.0 — 2026-10-13
 

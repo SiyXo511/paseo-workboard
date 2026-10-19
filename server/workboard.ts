@@ -93,28 +93,15 @@ function workspaceActivity(
     ) ?? "idle"
   );
 }
-/**
- * Paseo publishes no daemon-side "selected tab", so the tab the user most recently
- * addressed stands in for it: a workspace's card follows the conversation being used.
- */
-function latestTab(agents: readonly Agent[]): Agent | undefined {
-  const tabs = agents.filter((agent) => !agent.parentAgentId);
-  const addressed = tabs.filter((agent) =>
-    Number.isFinite(Date.parse(agent.lastUserMessageAt ?? "")),
+/** Cards stay workspace-scoped; provider children are not tabs, so they never count. */
+const liveTabs = (agents: readonly Agent[]) =>
+  agents.filter((agent) => !agent.archivedAt && !agent.parentAgentId);
+const anyRunning = (agents: readonly Agent[]) =>
+  liveTabs(agents).some(
+    (agent) => agent.activity === "running" || agent.activity === "waiting",
   );
-  const pool = addressed.length ? addressed : tabs;
-  let latest: Agent | undefined;
-  let latestTime = -Infinity;
-  for (const agent of pool) {
-    const stamp = Date.parse(
-      (addressed.length ? agent.lastUserMessageAt : agent.updatedAt) ?? "",
-    );
-    if (!Number.isFinite(stamp) || stamp <= latestTime) continue;
-    latest = agent;
-    latestTime = stamp;
-  }
-  return latest;
-}
+const anyUnread = (agents: readonly Agent[]) =>
+  liveTabs(agents).some((agent) => agent.activity === "attention");
 
 function projectChangeRequest(workspace?: Workspace): Card["changeRequest"] {
   const runtime = workspace?.githubRuntime;
@@ -167,9 +154,9 @@ export class Workboard {
       fingerprint: string;
     }
   >();
-  private pendingReviewTurns = new Map<string, string>();
-  private pendingReadTurns = new Map<string, string>();
-  private pendingStartTurns = new Map<string, string>();
+  private pendingReviewTurns = new Set<string>();
+  private pendingReadTurns = new Set<string>();
+  private pendingStartTurns = new Set<string>();
   private connected = false;
   private error: string | null = "Workboard is starting";
   private refreshedAt: string | null = null;
@@ -1411,7 +1398,7 @@ export class Workboard {
         finished: this.pendingReviewTurns,
         read: this.pendingReadTurns,
       }[completion.kind];
-      pending.set(completion.workspaceId, completion.agentId);
+      pending.add(completion.workspaceId);
     }
   }
   private async autoStartRunningTurns(): Promise<void> {
@@ -1430,7 +1417,7 @@ export class Workboard {
     }
     // Events cover live transitions; this reconciliation also covers an Agent that was
     // already running when Workboard started and whose start event was never observed.
-    const candidates = new Map(this.pendingStartTurns);
+    const candidates = new Set(this.pendingStartTurns);
     for (const task of this.store.current.tasks) {
       if (
         !task.workspaceId ||
@@ -1442,12 +1429,10 @@ export class Workboard {
       const agents = this.inventory.agents.filter(
         (agent) => agent.workspaceId === task.workspaceId && !agent.archivedAt,
       );
-      const owner = latestTab(agents);
-      if (owner?.activity === "running")
-        candidates.set(task.workspaceId, owner.id);
+      if (anyRunning(agents)) candidates.add(task.workspaceId);
     }
     if (!candidates.size) return;
-    for (const [workspaceId, startedAgentId] of candidates) {
+    for (const workspaceId of candidates) {
       const workspace = this.inventory.workspaces.find(
         (candidate) => candidate.id === workspaceId,
       );
@@ -1477,12 +1462,7 @@ export class Workboard {
       const agents = this.inventory.agents.filter(
         (agent) => agent.workspaceId === workspaceId && !agent.archivedAt,
       );
-      const owner = latestTab(agents);
-      if (
-        !owner ||
-        owner.id !== startedAgentId ||
-        owner.activity !== "running"
-      ) {
+      if (!anyRunning(agents)) {
         this.pendingStartTurns.delete(workspaceId);
         continue;
       }
@@ -1525,9 +1505,7 @@ export class Workboard {
       this.pendingReviewTurns.clear();
       return;
     }
-    for (const [workspaceId, completedAgentId] of [
-      ...this.pendingReviewTurns,
-    ]) {
+    for (const workspaceId of [...this.pendingReviewTurns]) {
       const workspace = this.inventory.workspaces.find(
         (candidate) => candidate.id === workspaceId,
       );
@@ -1561,17 +1539,10 @@ export class Workboard {
         this.pendingReviewTurns.delete(workspaceId);
         continue;
       }
-      // Only the tab the user is actually using drives the card, so a parallel tab in the
-      // same workspace neither blocks the move nor pushes the card into Review on its own.
-      const owner = latestTab(agents);
-      if (!owner || owner.id !== completedAgentId) {
-        this.pendingReviewTurns.delete(workspaceId);
-        continue;
-      }
-      if (owner.activity === "running" || owner.activity === "waiting")
-        continue;
-      // Finished but already read (attention cleared), or failed: nothing to review.
-      if (owner.activity !== "attention") {
+      // Cards stay workspace-scoped: any tab still running keeps the workspace In progress,
+      // and any unread tab is enough to send it to Review.
+      if (anyRunning(agents)) continue;
+      if (!anyUnread(agents)) {
         this.pendingReviewTurns.delete(workspaceId);
         continue;
       }
@@ -1608,7 +1579,7 @@ export class Workboard {
       return;
     }
     const target = defaultGroup(settings.groups, settings.defaultDraftGroup);
-    for (const [workspaceId, readAgentId] of [...this.pendingReadTurns]) {
+    for (const workspaceId of [...this.pendingReadTurns]) {
       const workspace = this.inventory.workspaces.find(
         (candidate) => candidate.id === workspaceId,
       );
@@ -1637,8 +1608,8 @@ export class Workboard {
       const agents = this.inventory.agents.filter(
         (agent) => agent.workspaceId === workspaceId && !agent.archivedAt,
       );
-      const owner = latestTab(agents);
-      if (!owner || owner.id !== readAgentId || owner.activity !== "idle") {
+      if (anyRunning(agents)) continue;
+      if (anyUnread(agents)) {
         this.pendingReadTurns.delete(workspaceId);
         continue;
       }
