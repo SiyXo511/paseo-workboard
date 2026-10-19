@@ -192,6 +192,42 @@ it("keeps finished work that was already read in In progress", async () => {
   }
 });
 
+it("moves a To do task into In progress when its owner starts running", async () => {
+  const test = reviewFixture();
+  test.inventory.workspaces[0].labels = ["task:todo"];
+  test.inventory.agents[0].activity = "idle";
+  try {
+    await test.board.start();
+    expect(test.board.snapshot().cards[0].stage).toBe("todo");
+
+    test.inventory.agents[0].activity = "running";
+    test.completeTurn("w", "agent", "started");
+    await test.board.refresh();
+
+    expect(test.host.setLabel).toHaveBeenCalledWith(
+      "w",
+      "task:in-progress",
+      "blue",
+      true,
+    );
+    expect(test.board.snapshot().cards[0].stage).toBe("in-progress");
+  } finally {
+    test.board.dispose();
+  }
+});
+
+it("reconciles a To do task whose owner was already running at startup", async () => {
+  const test = reviewFixture();
+  test.inventory.workspaces[0].labels = ["task:todo"];
+  test.inventory.agents[0].activity = "running";
+  try {
+    await test.board.start();
+    expect(test.board.snapshot().cards[0].stage).toBe("in-progress");
+  } finally {
+    test.board.dispose();
+  }
+});
+
 it("returns a Review task to To do when its owner reads the unread output", async () => {
   const test = reviewFixture();
   test.inventory.workspaces[0].labels = ["task:review"];

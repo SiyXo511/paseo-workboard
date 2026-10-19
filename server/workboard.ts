@@ -169,6 +169,7 @@ export class Workboard {
   >();
   private pendingReviewTurns = new Map<string, string>();
   private pendingReadTurns = new Map<string, string>();
+  private pendingStartTurns = new Map<string, string>();
   private connected = false;
   private error: string | null = "Workboard is starting";
   private refreshedAt: string | null = null;
@@ -222,6 +223,7 @@ export class Workboard {
         this.bindingInFlight.delete(task.binding!.operationId);
       await this.reconcile();
       this.queueCompletions();
+      await this.autoStartRunningTurns();
       await this.autoReviewCompletedTurns();
       await this.autoReturnReadTurns();
       await this.scan();
@@ -254,6 +256,7 @@ export class Workboard {
         if (!this.connected) await this.load();
         await this.reconcile(scope);
         this.queueCompletions();
+        await this.autoStartRunningTurns();
         await this.autoReviewCompletedTurns();
         await this.autoReturnReadTurns();
         await this.scan(scope);
@@ -1403,11 +1406,108 @@ export class Workboard {
   }
   private queueCompletions(): void {
     for (const completion of this.host.takeTurnCompletions()) {
-      const pending =
-        completion.kind === "read"
-          ? this.pendingReadTurns
-          : this.pendingReviewTurns;
+      const pending = {
+        started: this.pendingStartTurns,
+        finished: this.pendingReviewTurns,
+        read: this.pendingReadTurns,
+      }[completion.kind];
       pending.set(completion.workspaceId, completion.agentId);
+    }
+  }
+  private async autoStartRunningTurns(): Promise<void> {
+    const settings = this.store.current.settings;
+    if (!settings.autoMoveInProgressToReview) {
+      this.pendingStartTurns.clear();
+      return;
+    }
+    const target = defaultStartWorkGroup(
+      settings.groups,
+      settings.defaultStartWorkGroup,
+    );
+    if (!target) {
+      this.pendingStartTurns.clear();
+      return;
+    }
+    // Events cover live transitions; this reconciliation also covers an Agent that was
+    // already running when Workboard started and whose start event was never observed.
+    const candidates = new Map(this.pendingStartTurns);
+    for (const task of this.store.current.tasks) {
+      if (
+        !task.workspaceId ||
+        task.archived ||
+        task.binding ||
+        groupKind(task.lastStage, settings.groups) !== "todo"
+      )
+        continue;
+      const agents = this.inventory.agents.filter(
+        (agent) => agent.workspaceId === task.workspaceId && !agent.archivedAt,
+      );
+      const owner = latestTab(agents);
+      if (owner?.activity === "running")
+        candidates.set(task.workspaceId, owner.id);
+    }
+    if (!candidates.size) return;
+    for (const [workspaceId, startedAgentId] of candidates) {
+      const workspace = this.inventory.workspaces.find(
+        (candidate) => candidate.id === workspaceId,
+      );
+      const task = this.store.current.tasks.find(
+        (candidate) => candidate.workspaceId === workspaceId,
+      );
+      if (
+        !workspace ||
+        !task ||
+        workspace.archivingAt ||
+        task.archived ||
+        task.binding ||
+        task.issue === "labels-conflict"
+      ) {
+        this.pendingStartTurns.delete(workspaceId);
+        continue;
+      }
+      const stage = resolveStage(
+        workspace.labels,
+        settings.groups,
+        settings.defaultStartGroup,
+      );
+      if (groupKind(stage, settings.groups) !== "todo") {
+        this.pendingStartTurns.delete(workspaceId);
+        continue;
+      }
+      const agents = this.inventory.agents.filter(
+        (agent) => agent.workspaceId === workspaceId && !agent.archivedAt,
+      );
+      const owner = latestTab(agents);
+      if (
+        !owner ||
+        owner.id !== startedAgentId ||
+        owner.activity !== "running"
+      ) {
+        this.pendingStartTurns.delete(workspaceId);
+        continue;
+      }
+      try {
+        const next = await this.transition(
+          workspaceId,
+          target,
+          statusLabels(workspace.labels, settings.groups),
+        );
+        this.inventory.workspaces = this.inventory.workspaces.map(
+          (candidate) => (candidate.id === workspaceId ? next : candidate),
+        );
+        await this.store.update((data) => {
+          const current = data.tasks.find(
+            (candidate) => candidate.id === task.id,
+          );
+          if (!current) return;
+          current.lastStage = target;
+          current.updatedAt = this.stamp(current.updatedAt);
+        });
+        this.changed(workspaceId);
+      } catch {
+        await this.issue(task.id, "auto-review-failed");
+      }
+      this.pendingStartTurns.delete(workspaceId);
     }
   }
   private async autoReviewCompletedTurns(): Promise<void> {

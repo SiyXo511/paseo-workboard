@@ -310,7 +310,9 @@ it("queues a finished completion when an Agent settles unread", async () => {
       } as unknown as Parameters<SubscriptionObserver<unknown>["update"]>[0]);
 
     upsert({ status: "running", activeTurn: { id: "turn" } });
-    expect(host.takeTurnCompletions()).toEqual([]);
+    expect(host.takeTurnCompletions()).toEqual([
+      { workspaceId: "w1", agentId: "parent", kind: "started" },
+    ]);
     upsert({
       status: "idle",
       requiresAttention: true,
@@ -348,6 +350,9 @@ it("queues a read completion when the unread attention clears", async () => {
         },
       } as unknown as Parameters<SubscriptionObserver<unknown>["update"]>[0]);
     upsert({ status: "running", activeTurn: { id: "turn" } });
+    expect(host.takeTurnCompletions()).toEqual([
+      { workspaceId: "w1", agentId: "parent", kind: "started" },
+    ]);
     upsert({
       status: "idle",
       requiresAttention: true,
@@ -388,6 +393,7 @@ it("does not treat a failed turn as a completed one", async () => {
         },
       } as unknown as Parameters<SubscriptionObserver<unknown>["update"]>[0]);
     upsert({ status: "running", activeTurn: { id: "turn" } });
+    host.takeTurnCompletions();
     upsert({ status: "error", lastError: "boom" });
     expect(host.takeTurnCompletions()).toEqual([]);
   } finally {

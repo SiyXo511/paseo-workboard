@@ -90,8 +90,8 @@ export interface Inventory {
 export interface TurnCompletion {
   workspaceId: string;
   agentId: string;
-  /** `finished` carries unread output; `read` means the user has looked at it. */
-  kind: "finished" | "read";
+  /** `started` begins work, `finished` carries unread output, `read` clears it. */
+  kind: "started" | "finished" | "read";
 }
 export interface Host {
   identity: { serverId: string; version: string };
@@ -234,11 +234,14 @@ export class PaseoHost implements Host {
         this.agentWorkspaces.get(agentId) ??
         this.agentUpdates.get(agentId)?.workspaceId;
       if (event.type === "turn_completed" && workspaceId) {
-        this.turnCompletions.set(`${workspaceId}\u0000${agentId}`, {
-          workspaceId,
-          agentId,
-          kind: "finished",
-        });
+        this.turnCompletions.set(
+          `${workspaceId}\u0000${agentId}\u0000finished`,
+          {
+            workspaceId,
+            agentId,
+            kind: "finished",
+          },
+        );
         this.changed(workspaceId);
       }
     } else if (message.type === "agent.provider_subagents.update") {
@@ -266,12 +269,19 @@ export class PaseoHost implements Host {
       (previous === "running" || previous === "waiting") &&
       agent.activity === "attention";
     const read = previous === "attention" && agent.activity === "idle";
-    if (!finished && !read) return;
-    this.turnCompletions.set(`${agent.workspaceId}\u0000${agent.id}`, {
-      workspaceId: agent.workspaceId,
-      agentId: agent.id,
-      kind: finished ? "finished" : "read",
-    });
+    const started =
+      (previous === "idle" || previous === "attention") &&
+      agent.activity === "running";
+    if (!finished && !read && !started) return;
+    const kind = started ? "started" : finished ? "finished" : "read";
+    this.turnCompletions.set(
+      `${agent.workspaceId}\u0000${agent.id}\u0000${kind}`,
+      {
+        workspaceId: agent.workspaceId,
+        agentId: agent.id,
+        kind,
+      },
+    );
   }
   async inventory(): Promise<Inventory> {
     if (this.disposed) throw new Error("Workboard stopped");
