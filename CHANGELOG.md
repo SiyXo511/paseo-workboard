@@ -15,6 +15,7 @@ All notable changes are documented here.
 - Tie the automation to Paseo's persisted unread state: an unread finish moves the task to Review, and reading that output moves it back to To do.
 - Move a To do task into In progress when any tab of its workspace starts running, closing the loop with the Review and read transitions.
 - Keep cards workspace-scoped: any running tab keeps the workspace In progress, and Review waits until every tab has stopped and all unread output is read.
+- Let a workspace whose tabs were all removed age into archive by using the task's last update as its upper bound instead of staying at an unknown time.
 
 ## 0.3.0 — 2026-10-13
 
