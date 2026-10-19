@@ -5,47 +5,9 @@ import type {
   SubscriptionObserver,
 } from "@getpaseo/client";
 import { allPages, PaseoHost } from "../server/host";
-import type { Workspace } from "../server/host";
 import type { TimelineReader } from "../server/conversations";
 import type { PaseoCompat } from "../server/paseo-compat";
 import { workspace } from "./fixtures";
-
-it("keeps Git safety only for archives that can delete a worktree", async () => {
-  const api = {
-    terminals: { list: vi.fn(async () => ({ entries: [] })) },
-  } as unknown as PaseoApi;
-  const host = new PaseoHost(
-    api,
-    {} as PaseoCompat,
-    { serverId: "s", version: "0.11.4" },
-    () => {},
-  );
-  try {
-    const local: Workspace = {
-      ...workspace("local"),
-      workspaceKind: "local_checkout",
-      projectKind: "git",
-      workspaceDirectory: "/definitely/missing",
-    };
-    expect(await host.safety(local)).toBeNull();
-
-    const owned: Workspace = {
-      ...local,
-      workspaceKind: "worktree",
-      gitRuntime: { isPaseoOwnedWorktree: true } as Workspace["gitRuntime"],
-    };
-    expect(await host.safety(owned)).toBe("directory-unavailable");
-
-    const foreign: Workspace = {
-      ...local,
-      workspaceKind: "worktree",
-      gitRuntime: { isPaseoOwnedWorktree: false } as Workspace["gitRuntime"],
-    };
-    expect(await host.safety(foreign)).toBe("git-unknown");
-  } finally {
-    host.dispose();
-  }
-});
 
 it("reads every page and rejects a cursor loop instead of silently truncating", async () => {
   expect(

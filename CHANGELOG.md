@@ -11,7 +11,6 @@ All notable changes are documented here.
 - Ignore historical Agent errors when newer healthy activity exists in the same workspace.
 - Let the opt-in Review automation ignore historical Agent errors that newer healthy activity has superseded, so a recovered workspace can still move to Review.
 - Follow the most recently addressed tab when deciding automatic Review moves, so a workspace's parallel tabs neither block the move nor trigger it on their own.
-- Require a clean, pushed Git state only for Paseo-owned worktrees, whose directories the native archive may delete; local checkouts keep their directory and archive without a Git cleanup step.
 
 ## 0.3.0 — 2026-10-13
 
