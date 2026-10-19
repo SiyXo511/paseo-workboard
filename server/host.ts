@@ -544,10 +544,14 @@ export class PaseoHost implements Host {
         .length
     )
       return "terminal-open";
+    // Native archive only deletes Paseo-owned worktrees. A local checkout keeps its
+    // directory, so dirty or unpushed Git there is not an archive data-loss risk.
     if (
-      workspace.workspaceKind === "worktree" &&
-      workspace.gitRuntime?.isPaseoOwnedWorktree !== true
+      workspace.workspaceKind !== "worktree" &&
+      workspace.workspaceKind !== "checkout"
     )
+      return null;
+    if (workspace.gitRuntime?.isPaseoOwnedWorktree !== true)
       return "git-unknown";
     return checkGitSafety(
       workspace.workspaceDirectory,
