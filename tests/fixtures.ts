@@ -82,6 +82,10 @@ export function fixture(initial: Partial<Data> = {}) {
       w.pinnedAt = pinned ? new Date(now() + ++pinWrites).toISOString() : null;
       return w.pinnedAt;
     }),
+    markRead: vi.fn(async (ids) => {
+      for (const agent of inventory.agents)
+        if (ids.includes(agent.id)) agent.activity = "idle";
+    }),
     archive: vi.fn(async (id) => {
       inventory.workspaces = inventory.workspaces.filter((w) => w.id !== id);
       return { archivedAt: new Date(now()).toISOString(), error: null };

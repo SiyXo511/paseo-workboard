@@ -17,6 +17,7 @@ All notable changes are documented here.
 - Keep cards workspace-scoped: any running tab keeps the workspace In progress, and Review waits until every tab has stopped and all unread output is read.
 - Let a workspace whose tabs were all removed age into archive by using the task's last update as its upper bound instead of staying at an unknown time.
 - Pin Review workspaces in the Paseo sidebar as well as In progress ones, releasing only pins the plugin owns.
+- Add a **Mark read** card action that clears Paseo's unread attention for the workspace, so the badge no longer stays stuck when the conversation is not opened.
 
 ## 0.3.0 — 2026-10-13
 

@@ -28,6 +28,8 @@ daemon 分页导入全部活跃 workspace。没有受管理分组标签的 works
 
 Agent 活动单独展示，回复结束不会把任务标为完成。卡片始终按 workspace 划分：一个 workspace 可以有多个标签，其活动按 workspace 聚合；provider 子 Agent 不算标签，不参与聚合。主信号来自 agents 订阅，因为 Paseo 只把 `agent_stream.turn_completed` 发给 timeline 订阅者，而 Workboard 并不是其中之一。这里排队三种转变：空闲/需要关注 → 运行代表开始工作；运行/等待 → 需要关注（`requiresAttention`，原因 `finished`）代表有未读输出；需要关注 → 空闲代表用户已经查看。启用可选的自动化后，任一标签开始运行会把待开始任务移到配置的进行中组；未读完成会在所有标签都停止运行/等待后把进行中任务移到配置的待验收组；已读转变会在既无运行标签也无未读时把仍在待验收的任务移到配置的待开始组。要求标签不冲突且没有待完成绑定。启动或设置变化不会伪造转变。PR/MR 信息来自 Paseo workspace 数据；Workboard 不额外轮询 forge，也不实现另一套合并检测。
 
+`mark-read` 变更会通过兼容桥对任务所在 workspace 里所有未归档且未读的 Agent 发送 `clear_agent_attention`。随后产生的 `agent_update` 与打开对话时走同一条已读转变，因此两个入口不会分叉。
+
 ## 保存与并发
 
 host settings 使用 schema version 8，保存任务、分组、偏好、绑定/归档意图和插件拥有的置顶时间戳。Version 6 把对话记录拆成展示证据与门禁证据；Version 7 增加归档天数、默认落点和 task 顶层的 `mergedDrafts` 数组（历史任务默认空数组）。Store 校验数据，并以宿主 settings revision 为基线保存。迁移保留既有记录；不支持或损坏的数据会阻止正常初始化、停止自动重试，并通过看板错误提示展示原因；连接等瞬时错误仍每 10 秒重试。数据不会被静默替换。v5 迁移跳过没有观测时间的历史 Agent ID；v6→v7 迁移清洗已有的无观测时间条目，由真实扫描重新发现。旧配置没有已废弃组时，迁移补建一个与既有配置 ID、标签均不冲突的已废弃组，保留已有分组、任务及顺序。由于迁移无法检查宿主上的普通标签，补建时关闭自动归档，并持久化 `archiveMappingNeedsReview` 标记显示双语原因，重新开启后清除；存在到期任务时复用既有确认流程。未补建组的正常迁移保留原归档偏好。v1–v7 沿既有链路最终升级到 v8。

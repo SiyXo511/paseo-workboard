@@ -12,6 +12,8 @@ Task status is a business decision. Agent states such as running, waiting for in
 
 An optional, off-by-default setting links the board to Paseo's persisted unread state. Cards stay workspace-scoped even when the workspace holds several tabs. Any tab starting a turn moves a To do task to In progress, and the task stays there while any tab is running or waiting for permission/input. When the workspace finishes with unread output, Paseo sets `requiresAttention` with the `finished` reason and Workboard moves the task to Review. Once nothing is running and no unread output remains, a task still in Review moves to To do. Finishing while everything is already read leaves the card In progress, and failed, canceled, or ambiguous states are left unchanged. Paseo streams `turn_completed` only to timeline subscribers, so Workboard derives these transitions from the agents subscription. The setting does not sweep existing history when it is enabled or when Workboard starts, and it never moves directly to Done.
 
+Every card that still has unread output shows a **Mark read** action. It clears Paseo's attention flag for that workspace without opening a tab, so the unread badge disappears and the normal read transition applies.
+
 ## Work with tasks
 
 ### Create and start

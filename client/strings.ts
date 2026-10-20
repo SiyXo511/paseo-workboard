@@ -131,6 +131,7 @@ const zh = {
   start: "开始工作",
   startHint: "选择项目并创建或关联 workspace。",
   status: "状态",
+  markRead: "已读",
   create: "创建草稿",
   update: "保存修改",
   titleField: "标题",
@@ -299,6 +300,8 @@ const zh = {
   },
   archiveConfirmedByUser: "归档结果已由用户确认",
   mutationErrors: {
+    "Task has no workspace to read":
+      "这个任务没有关联 workspace，无法标记已读。",
     "card-order-changed": "列内任务顺序或成员已改变，请刷新后重试。",
     "card-order-invalid":
       "排序无效；只能移动当前任务并保留其它任务的相对顺序。",
@@ -559,6 +562,7 @@ const en: typeof zh = {
   start: "Start work",
   startHint: "Choose a project and create or link a workspace.",
   status: "Status",
+  markRead: "Mark read",
   create: "Create draft",
   update: "Save changes",
   titleField: "Title",
@@ -742,6 +746,8 @@ const en: typeof zh = {
   },
   archiveConfirmedByUser: "Archive outcome confirmed by user",
   mutationErrors: {
+    "Task has no workspace to read":
+      "This task has no workspace to mark as read.",
     "card-order-changed":
       "Column order or membership changed. Refresh and retry.",
     "card-order-invalid":

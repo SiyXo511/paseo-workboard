@@ -109,6 +109,7 @@ export interface Host {
     assigned: boolean,
   ): Promise<string[]>;
   setPinned(workspaceId: string, pinned: boolean): Promise<string | null>;
+  markRead(agentIds: readonly string[]): Promise<void>;
   create(
     source: Extract<StartInput["target"], { kind: "new" }>["source"],
     title: string,
@@ -564,6 +565,14 @@ export class PaseoHost implements Host {
   }
   setPinned(id: string, pinned: boolean) {
     return this.compat.setPinned(id, pinned);
+  }
+  async markRead(agentIds: readonly string[]): Promise<void> {
+    if (!agentIds.length) return;
+    await this.compat.request(
+      "clear_agent_attention",
+      { agentId: [...agentIds] },
+      "clear_agent_attention_response",
+    );
   }
   async create(
     source: Extract<StartInput["target"], { kind: "new" }>["source"],

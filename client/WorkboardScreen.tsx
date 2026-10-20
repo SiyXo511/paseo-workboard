@@ -1061,7 +1061,8 @@ function HostWorkboard(props: PluginSurfaceProps & { initialPage?: Page }) {
             disabled={writesDisabled}
             pending={
               pendingMutationIds.has(`stage:${card.id}`) ||
-              pendingMutationIds.has(`card-order:${card.stage}`)
+              pendingMutationIds.has(`card-order:${card.stage}`) ||
+              pendingMutationIds.has(`read:${card.id}`)
             }
             compact={props.layout.compact}
             showDragHandle={showDragHandle}
@@ -1089,6 +1090,12 @@ function HostWorkboard(props: PluginSurfaceProps & { initialPage?: Page }) {
             }
             onStart={() => setStarting({ card })}
             onStatus={() => setStatusCard(card)}
+            onMarkRead={() => {
+              void mutate(
+                { action: "mark-read", taskId: card.id },
+                `read:${card.id}`,
+              );
+            }}
             onArchive={() => setArchivingDraft(card)}
             onCancelBinding={() => setCancelingBinding(card)}
             onDetachDraft={(draftId) => setDetachingDraft({ card, draftId })}

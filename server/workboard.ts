@@ -1146,6 +1146,18 @@ export class Workboard {
                 detail: "Draft archived; no native workspace",
               };
             });
+          } else if (input.action === "mark-read") {
+            if (!task.workspaceId)
+              throw new Error("Task has no workspace to read");
+            const unread = this.inventory.agents.filter(
+              (agent) =>
+                agent.workspaceId === task.workspaceId &&
+                !agent.archivedAt &&
+                agent.activity === "attention",
+            );
+            await this.host.markRead(unread.map((agent) => agent.id));
+            await this.reconcile();
+            this.changed();
           } else if (input.action === "detach-draft") {
             await this.store.update((data) => {
               const current = data.tasks.find((t) => t.id === task.id)!;

@@ -190,6 +190,22 @@ it("keeps finished work that was already read in In progress", async () => {
   }
 });
 
+it("marks unread output as read through the host", async () => {
+  const test = reviewFixture();
+  try {
+    await test.board.start();
+    const card = test.board.snapshot().cards[0];
+    expect(card.activity).toBe("attention");
+
+    await test.board.mutate({ action: "mark-read", taskId: card.id });
+
+    expect(test.host.markRead).toHaveBeenCalledWith(["agent"]);
+    expect(test.board.snapshot().cards[0].activity).toBe("idle");
+  } finally {
+    test.board.dispose();
+  }
+});
+
 it("moves a To do task into In progress when a tab starts running", async () => {
   const test = reviewFixture();
   test.inventory.workspaces[0].labels = ["task:todo"];

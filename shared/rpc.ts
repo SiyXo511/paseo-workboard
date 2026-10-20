@@ -56,6 +56,7 @@ export const mutationSchema = z.discriminatedUnion("action", [
     expectedOrder: z.array(z.string()),
   }),
   z.object({ action: z.literal("archive-draft"), taskId: z.string() }),
+  z.object({ action: z.literal("mark-read"), taskId: z.string() }),
   z.object({
     action: z.literal("detach-draft"),
     taskId: z.string(),

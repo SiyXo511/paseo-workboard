@@ -50,6 +50,7 @@ export function TaskItem({
   onEdit,
   onStart,
   onStatus,
+  onMarkRead,
   onArchive,
   onCancelBinding,
   onDetachDraft,
@@ -68,6 +69,7 @@ export function TaskItem({
   onEdit(): void;
   onStart(): void;
   onStatus(): void;
+  onMarkRead(): void;
   onArchive(): void;
   onCancelBinding(): void;
   onDetachDraft(draftId: string): void;
@@ -304,6 +306,44 @@ export function TaskItem({
           {presentation === "row" && (
             <Text style={[styles.cardMeta, { color: theme.colors.foreground }]}>
               {t.notes}
+            </Text>
+          )}
+        </CardAction>
+      )}
+      {card.activity === "attention" && (
+        <CardAction
+          theme={theme}
+          hint={t.markRead}
+          accessibilityRole="button"
+          accessibilityLabel={t.markRead}
+          disabled={
+            disabled ||
+            pending ||
+            card.binding !== null ||
+            card.archived !== null
+          }
+          onPress={() => {
+            setActionsOpen(false);
+            onMarkRead();
+          }}
+          style={({ pressed }) => [
+            styles.iconAction,
+            presentation === "row" && styles.rowMenuAction,
+            {
+              opacity:
+                disabled || pending || card.binding || card.archived ? 0.5 : 1,
+            },
+            pressed && { backgroundColor: theme.colors.surface2 },
+          ]}
+        >
+          <Icon
+            name="CircleCheck"
+            size={15}
+            color={theme.colors.foregroundMuted}
+          />
+          {presentation === "row" && (
+            <Text style={[styles.cardMeta, { color: theme.colors.foreground }]}>
+              {t.markRead}
             </Text>
           )}
         </CardAction>
