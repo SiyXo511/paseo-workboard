@@ -13,7 +13,7 @@ async function enabled(board: Workboard, value: boolean) {
   });
 }
 
-it("pins by native task group, persists ownership, and unpins after leaving the group", async () => {
+it("pins In progress and Review, persists ownership, and unpins after leaving both", async () => {
   const { board, host, inventory, backing, now } = fixture();
   inventory.workspaces.push(
     workspace("in-progress", "Idle agent", ["task:in-progress"]),
@@ -37,6 +37,11 @@ it("pins by native task group, persists ownership, and unpins after leaving the 
     await reopened.start();
     expect(host.setPinned).toHaveBeenCalledTimes(1);
     inventory.workspaces[0].labels = ["task:review"];
+    await reopened.refresh();
+    expect(host.setPinned).toHaveBeenCalledTimes(1);
+    expect(inventory.workspaces[0].pinnedAt).toBeTruthy();
+
+    inventory.workspaces[0].labels = ["task:done"];
     await reopened.refresh();
     expect(host.setPinned).toHaveBeenLastCalledWith("in-progress", false);
     expect(inventory.workspaces[0].pinnedAt).toBeNull();

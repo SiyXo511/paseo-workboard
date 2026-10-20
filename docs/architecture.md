@@ -52,7 +52,7 @@ Starting work persists an operation ID and uses Paseo's idempotent workspace cre
 
 ## Automation safeguards
 
-Sidebar pinning is enabled by default and follows the `in-progress` group type. Workboard records the exact `pinnedAt` value returned by Paseo. It removes only a pin it still owns; an existing or manually replaced pin remains. A user removing an automatic pin suppresses repinning until the task leaves and re-enters that type.
+Sidebar pinning is enabled by default and follows the `in-progress` and `review` group types. Workboard records the exact `pinnedAt` value returned by Paseo. It removes only a pin it still owns; an existing or manually replaced pin remains. A user removing an automatic pin suppresses repinning until the task leaves and re-enters one of those types.
 
 Automatic archive is disabled by default. Done and Canceled groups have independent enable flags and delays. Each enabled rule requires strictly more than its configured delay (30 days by default, an integer from 1 to 365) since the latest verified user or assistant message across the workspace's agents. Settings from before per-state rules use the former shared `archiveAfterDays` value as both rules' fallback until their delays are edited. Changing labels, editing notes or importing a workspace does not reset this clock. Drafts and workspaces without conversation evidence do not qualify.
 

@@ -672,17 +672,18 @@ export class Workboard {
       !this.stopped && connection === this.connectionGeneration;
     const wantsPin = (workspace: Workspace) => {
       const settings = this.store.current.settings;
+      const kind = groupKind(
+        resolveStage(
+          workspace.labels,
+          settings.groups,
+          settings.defaultStartGroup,
+        ),
+        settings.groups,
+      );
       return (
         settings.pinInProgressWorkspaces &&
         !workspace.archivingAt &&
-        groupKind(
-          resolveStage(
-            workspace.labels,
-            settings.groups,
-            settings.defaultStartGroup,
-          ),
-          settings.groups,
-        ) === "in-progress"
+        (kind === "in-progress" || kind === "review")
       );
     };
     for (const listed of inventory.workspaces) {

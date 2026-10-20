@@ -195,9 +195,9 @@ const zh = {
   enableAutoArchiveConfirm:
     "当前有 {count} 个任务已到期（已废弃 {canceled} 个，已完成 {done} 个）。开启后会在安全检查通过时自动归档对应 workspace，可能停止 Agent 和 terminal，并移除托管 worktree。",
   enable: "开启",
-  pinInProgressWorkspaces: "进行中任务在 Paseo 侧边栏自动置顶",
+  pinInProgressWorkspaces: "进行中和待验收任务在 Paseo 侧边栏自动置顶",
   pinInProgressHint:
-    "按“进行中”分组判断；离开该分组时仅取消插件添加的置顶，保留你手动置顶的 workspace。",
+    "按“进行中”和“待验收”分组判断；离开这些分组时仅取消插件添加的置顶，保留你手动置顶的 workspace。",
   settingsTitle: "设置",
   generalSettings: "通用",
   groups: "分组",
@@ -627,9 +627,10 @@ const en: typeof zh = {
   enableAutoArchiveConfirm:
     "{count} task(s) are currently due ({canceled} Canceled, {done} Done). Enabling this will archive their workspaces after safety checks, which may stop agents and terminals and remove managed worktrees.",
   enable: "Enable",
-  pinInProgressWorkspaces: "Pin in-progress tasks in the Paseo sidebar",
+  pinInProgressWorkspaces:
+    "Pin In progress and Review tasks in the Paseo sidebar",
   pinInProgressHint:
-    "Use the In progress group. Leaving it removes only the pin added by this plugin; manually pinned workspaces stay pinned.",
+    "Use the In progress and Review groups. Leaving them removes only the pin added by this plugin; manually pinned workspaces stay pinned.",
   settingsTitle: "Settings",
   generalSettings: "General",
   groups: "Groups",

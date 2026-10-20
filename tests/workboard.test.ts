@@ -310,6 +310,28 @@ it("saves the sidebar In progress pin preference through the RPC contract and ke
   }
 });
 
+it("auto-pins Review workspaces alongside In progress and releases the pin when they leave", async () => {
+  const { board, host, inventory } = fixture();
+  inventory.workspaces.push(workspace("review", "Review", ["task:review"]));
+  inventory.workspaces.push(
+    workspace("progress", "Progress", ["task:in-progress"]),
+  );
+  inventory.workspaces.push(workspace("todo", "Todo", ["task:todo"]));
+  try {
+    await board.start();
+    const calls = vi.mocked(host.setPinned).mock.calls;
+    expect(calls).toContainEqual(["review", true]);
+    expect(calls).toContainEqual(["progress", true]);
+    expect(calls.some(([id]) => id === "todo")).toBe(false);
+
+    inventory.workspaces.find((w) => w.id === "review")!.labels = ["task:todo"];
+    await board.refresh();
+    expect(vi.mocked(host.setPinned)).toHaveBeenCalledWith("review", false);
+  } finally {
+    board.dispose();
+  }
+});
+
 it("projects native MR details through the board RPC, updates them and clears removed associations without changing task stage", async () => {
   const { board, inventory, store } = fixture();
   const linked = {
