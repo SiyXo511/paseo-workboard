@@ -18,7 +18,7 @@ All notable changes are documented here.
 - Let a workspace whose tabs were all removed age into archive by using the task's last update as its upper bound instead of staying at an unknown time.
 - Pin Review workspaces in the Paseo sidebar as well as In progress ones, releasing only pins the plugin owns.
 - Add a **Mark read** card action that clears Paseo's unread attention for the workspace, so the badge no longer stays stuck when the conversation is not opened.
-- Require only a clean tree for local checkouts and reserve upstream/pushed checks for Paseo-managed worktrees, so a clean branch without an upstream can still archive.
+- Require a clean tree for every workspace and an attached branch for Paseo worktrees; a missing upstream or unpushed commits no longer block archive because committed work stays on the branch.
 
 ## 0.3.0 — 2026-10-13
 

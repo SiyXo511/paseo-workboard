@@ -69,10 +69,24 @@ it("requires only a clean tree when the archive keeps the directory", async () =
     expect(
       await checkGitSafety(root, true, { requireUpstream: false }),
     ).toBeNull();
+    expect(
+      await checkGitSafety(root, true, {
+        requireUpstream: false,
+        requireBranch: true,
+      }),
+    ).toBeNull();
     await writeFile(join(root, "new"), "keep me\n");
     expect(await checkGitSafety(root, true, { requireUpstream: false })).toBe(
       "git-dirty",
     );
+    await rm(join(root, "new"));
+    git("checkout", "--detach");
+    expect(
+      await checkGitSafety(root, true, {
+        requireUpstream: false,
+        requireBranch: true,
+      }),
+    ).toBe("git-detached");
   } finally {
     await rm(root, { recursive: true, force: true });
   }

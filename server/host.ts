@@ -599,7 +599,7 @@ export class PaseoHost implements Host {
     return checkGitSafety(
       workspace.workspaceDirectory,
       workspace.projectKind === "git",
-      { requireUpstream: strict },
+      { requireUpstream: false, requireBranch: strict },
     );
   }
   archive(id: string) {
