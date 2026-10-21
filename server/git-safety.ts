@@ -8,6 +8,7 @@ const execute = promisify(execFile);
 export async function checkGitSafety(
   directory: string,
   isGit: boolean,
+  options: { requireUpstream?: boolean } = {},
 ): Promise<string | null> {
   try {
     if (!isAbsolute(directory) || !(await stat(directory)).isDirectory())
@@ -41,6 +42,7 @@ export async function checkGitSafety(
     }
     if (await git("status", "--porcelain=v1", "--untracked-files=all"))
       return "git-dirty";
+    if (options.requireUpstream === false) return null;
     let branch: string;
     try {
       branch = await git("symbolic-ref", "--quiet", "--short", "HEAD");

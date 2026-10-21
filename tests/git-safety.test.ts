@@ -50,3 +50,30 @@ it("allows an existing non-Git directory but not a missing directory", async () 
   }
   expect(await checkGitSafety(dir, false)).toBe("directory-unavailable");
 });
+
+it("requires only a clean tree when the archive keeps the directory", async () => {
+  const root = await mkdtemp(join(tmpdir(), "workboard-git-clean-"));
+  const git = (...args: string[]) =>
+    execFileSync("git", ["-C", root, ...args], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  try {
+    git("init", "-b", "main");
+    git("config", "user.name", "Workboard fixture");
+    git("config", "user.email", "fixture@example.invalid");
+    await writeFile(join(root, "a"), "initial\n");
+    git("add", "a");
+    git("commit", "-m", "initial");
+
+    expect(
+      await checkGitSafety(root, true, { requireUpstream: false }),
+    ).toBeNull();
+    await writeFile(join(root, "new"), "keep me\n");
+    expect(await checkGitSafety(root, true, { requireUpstream: false })).toBe(
+      "git-dirty",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

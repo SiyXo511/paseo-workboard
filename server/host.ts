@@ -591,14 +591,15 @@ export class PaseoHost implements Host {
         .length
     )
       return "terminal-open";
-    if (
-      workspace.workspaceKind === "worktree" &&
-      workspace.gitRuntime?.isPaseoOwnedWorktree !== true
-    )
+    const strict =
+      workspace.workspaceKind === "worktree" ||
+      workspace.workspaceKind === "checkout";
+    if (strict && workspace.gitRuntime?.isPaseoOwnedWorktree !== true)
       return "git-unknown";
     return checkGitSafety(
       workspace.workspaceDirectory,
       workspace.projectKind === "git",
+      { requireUpstream: strict },
     );
   }
   archive(id: string) {
