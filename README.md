@@ -1,87 +1,81 @@
 # Paseo Workboard
 
-[中文](README.zh-CN.md) · [User guide](docs/user-guide.md) · [中文使用指南](docs/zh-CN/user-guide.md)
+[简体中文](README.zh-CN.md)
 
-Workboard is a Paseo plugin with board and grouped-list views for workspaces and ideas. Each active workspace becomes one task. You can also capture a title-only draft first, then create or attach its workspace when you are ready to start.
+A task board for [Paseo](https://paseo.sh) workspaces, from quick ideas to completed work.
+
+Workboard brings active workspaces into one board, with one task per workspace. Capture an idea as a draft, create or attach a workspace when you start, and track progress in a board or grouped list. Task status stays under your control; an Agent finishing does **not** mark the task done.
 
 ![Workboard with sample tasks in English](images/workboard-en.png)
 
-## Highlights
+## Features
 
-- Import existing workspaces automatically, with one workspace represented by one task.
-- Keep drafts without a workspace, directory, Agent, or conversation.
-- Use groups and managed workspace labels as the task status; move cards or change a native label to update the same status.
-- See Agent activity separately from task status. An Agent finishing does **not** complete a task.
-- Follow Paseo's desktop language for Chinese and English UI text and dates.
-- Review compact PR/MR, CI, and review-decision information supplied by Paseo.
-- Switch between a board and a grouped list. Both views share tasks, group order, task order, and filters; each remembers its own collapsed groups. The board also supports column width and a single-group narrow layout.
-- Choose independent defaults for new drafts, unlabeled workspace imports, and Start work (an In progress group).
-- Reorder tasks and groups by dragging or keyboard controls. The list shows all groups vertically, including empty and collapsed drop targets; restore activity order from the group menu.
-- Optionally archive eligible completed or canceled workspaces after a configurable delay from their last verified conversation (30 days by default).
+- **Workspaces and drafts together.** Existing workspaces appear automatically. Drafts need only a title, with no workspace, directory, or Agent required.
+- **Board and list views.** Switch layouts while keeping the same tasks, filters, and ordering. Each view remembers its own collapsed groups.
+- **Status linked to workspace labels.** Move a task between groups or change its managed label in Paseo. Both update the same status while preserving unrelated labels.
+- **Activity at a glance.** See Agent activity, conversation dates, and PR/MR, CI, and review information supplied by Paseo. Filter tasks to focus on what needs attention.
+- **A configurable workflow.** Customize groups and their defaults, reorder tasks and groups by dragging or keyboard controls, and optionally pin in-progress workspaces in the sidebar.
+- **Optional automatic archiving.** Archive eligible completed or canceled workspaces after a configurable delay from their last verified conversation, with activity and Git safety checks. Disabled by default.
 
-## Compatibility and trust
-
-The minimum Paseo version is declared in `paseo-plugin.json`. The current source has isolated host integration coverage on Paseo 0.11.2; see [verification](docs/verification.md) for tested versions and remaining client checks.
-
-The public plugin SDK does not expose all of Workboard's label and workspace operations. Workboard uses an internal bridge that reuses the host session. The manifest sets the minimum version; bridge responses are checked at runtime. New Paseo versions may require another compatibility update.
-
-The plugin server runs with the daemon. Install it only after reviewing the source and treating it as trusted, unsandboxed local code.
+The interface follows Paseo's desktop/Web language and theme, with English and Chinese text and dates.
 
 ## Installation
 
-Install the source from GitHub into the selected Paseo daemon:
+Use a Paseo version that meets the minimum in [paseo-plugin.json](paseo-plugin.json). See [verification](docs/verification.md) for tested hosts and client coverage. Plugins run as trusted, unsandboxed code in the daemon; review the source before installing.
+
+Install from GitHub into the selected Paseo daemon:
 
 ```sh
 paseo plugin install github:fxbing/paseo-workboard
-```
-
-For local development or evaluation, install a checkout into the selected Paseo daemon:
-
-```sh
-npm ci
-paseo plugin install /absolute/path/to/paseo-workboard
 ```
 
 Enable plugins in Paseo, then open **Workboard** from the sidebar.
 
 ## Quick start
 
-1. Open Workboard. Existing active workspaces appear as tasks. Workspaces without a managed status label enter **Inbox** without writing a label during import.
-2. Create a draft with a title when you have an idea. It stays in **To do** and has no workspace yet.
-3. Select **Start work** to create a workspace or attach an existing one. Start a conversation from the native workspace when needed.
-4. Switch views as needed, then move a task between groups with the status menu or drag handle. Managed labels and task status stay synchronized.
-5. Configure labels, groups, automatic archiving, and optional sidebar pinning in **Settings**.
+1. **Find your workspaces.** Active workspaces appear as tasks. With the default settings, workspaces without a managed status label enter **Inbox**; importing them does not write a label.
+2. **Capture an idea.** Create a title-only draft. It starts in the configured draft group, **To do** by default, without creating a workspace or Agent.
+3. **Start work.** Create a workspace or attach an existing one. Start a conversation from the native workspace when needed; Workboard does not send a prompt for you.
+4. **Track progress.** Move tasks between groups using the status menu or drag handle. Use **Settings** to adjust groups, defaults, sidebar pinning, and automatic archiving.
+
+The [user guide](docs/user-guide.md) covers filters, ordering, undo, draft recovery, and settings.
 
 ## Documentation
 
-- [User guide](docs/user-guide.md): task flow, groups, board interaction, archive, pinning, and local preferences.
-- [中文使用指南](docs/zh-CN/user-guide.md): the same guide in Chinese.
-- [Contributing](CONTRIBUTING.md) · [中文贡献指南](CONTRIBUTING.zh-CN.md)
-- [Architecture](docs/architecture.md) · [中文架构](docs/zh-CN/architecture.md)
-- [Releasing](docs/releasing.md) · [中文发布](docs/zh-CN/releasing.md)
-- [Verification](docs/verification.md) · [中文验证](docs/zh-CN/verification.md)
+| Guide                                | Contents                                                   |
+| ------------------------------------ | ---------------------------------------------------------- |
+| [User guide](docs/user-guide.md)     | Task workflow, views, groups, and settings                 |
+| [Architecture](docs/architecture.md) | Data ownership, synchronization, and safety checks         |
+| [Verification](docs/verification.md) | Tested versions, recorded results, and unverified behavior |
+| [Releasing](docs/releasing.md)       | Package validation and release procedure                   |
+| [Changelog](CHANGELOG.md)            | Release history                                            |
 
-## Development
+## Contributing
+
+**Open an issue before opening a pull request**, or join an existing issue covering the same change. Describe the problem or use case and the intended result first. Keep each PR focused and link its issue.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for issue and PR contents, local setup, and required checks. AI coding assistants must also follow [AGENTS.md](AGENTS.md); `CLAUDE.md` links to the same instructions.
+
+For development, use the runtime pinned in `mise.toml`:
 
 ```sh
-npm ci
-npm run format:check
-npm run check
-npm run check:package
-npm pack --dry-run
+mise install
+mise exec -- npm ci --ignore-scripts
+mise exec -- npm run check
+mise exec -- npm run format:check
 ```
 
-Use the [isolated integration fixture](tests/integration/README.md) for host-level checks. Do not load development builds into a personal daemon as a substitute for that fixture.
+Use the [isolated integration fixture](tests/integration/README.md) for host-level checks and local plugin evaluation.
 
 ## Limitations
 
-- The manifest sets the minimum Paseo version. The internal bridge may require changes in later releases; see [verification](docs/verification.md) for tested hosts.
-- Automatic archival can stop Agents and terminals and may remove a managed worktree. Incomplete conversation history postpones automatic archival; Workboard cannot restore a native archive or a removed worktree.
-- Native workspace labels, archive, and sidebar pins can change outside Workboard. The host does not expose every atomic operation, so uncertain operations are retained for manual review rather than retried destructively.
-- The List view has been checked in Chrome, including dragging, shared ordering, undo, keyboard ordering, independent folds, and 390px Chinese/light and English/dark layouts. Long-duration edge autoscroll, `Escape` or blur during an active drag, Electron, and native mobile clients remain unverified.
+- Some label and workspace operations use an internal Paseo bridge that reuses the host session and validates responses. The manifest minimum does not guarantee compatibility with every later Paseo release; consult [verification](docs/verification.md) before upgrading.
+- Automatic archiving can stop Agents and terminals and may remove a managed worktree. Missing conversation evidence or unsafe state postpones it. Workboard cannot restore a native archive or a removed worktree.
+- Labels, archive state, and sidebar pins can change outside Workboard. The host does not expose every atomic operation; uncertain outcomes require manual review instead of destructive retries.
+- The List view has recorded Chrome checks. Electron, native mobile, long-duration edge autoscroll, and `Escape` or blur during an active drag remain unverified; see the verification guide for the full scope.
 
 ## License and acknowledgements
 
 [MIT](LICENSE).
 
-The project was inspired by [Paseo Thread Board](https://github.com/samgbafa/paseo-thread-board) and [Paseo Kanban](https://github.com/breathi3552/paseo-kanban).
+Inspired by [Paseo Thread Board](https://github.com/samgbafa/paseo-thread-board) and [Paseo Kanban](https://github.com/breathi3552/paseo-kanban).
