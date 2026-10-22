@@ -12,7 +12,12 @@ import {
   type Settings,
   type Stage,
 } from "../shared/model";
-import { DEFAULT_FILTERS, matchesRequest, type BoardFilters } from "./filters";
+import {
+  DEFAULT_FILTERS,
+  matchesDateRange,
+  matchesRequest,
+  type BoardFilters,
+} from "./filters";
 
 const attentionIssues = new Set([
   "labels-conflict",
@@ -57,7 +62,11 @@ export function visibleCards(
   projectId: string,
   search: string,
   attentionOnly: boolean,
-  filters: Pick<BoardFilters, "activity" | "changeRequest"> = DEFAULT_FILTERS,
+  filters: Pick<
+    BoardFilters,
+    "activity" | "changeRequest" | "dateRange"
+  > = DEFAULT_FILTERS,
+  now: number = Date.now(),
 ): Card[] {
   const needle = search.trim().toLocaleLowerCase();
   return board.cards.filter(
@@ -71,6 +80,7 @@ export function visibleCards(
       (!attentionOnly || attentionReasons(card).length > 0) &&
       (filters.activity === "all" || card.activity === filters.activity) &&
       matchesRequest(card, filters.changeRequest) &&
+      matchesDateRange(card, filters.dateRange, now) &&
       (!needle ||
         `${card.title} ${card.projectName} ${card.description}`
           .toLocaleLowerCase()

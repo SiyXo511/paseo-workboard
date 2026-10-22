@@ -192,6 +192,14 @@ const zh = {
   exclusiveStatusLabels: "状态标签互斥（新标签替换旧标签）",
   exclusiveStatusHint:
     "任务在外部获得新的状态标签时，自动移除上一次的状态标签，只保留最新选择的分组；仅作用于下方分组配置的标签，其他标签不受影响。无法判断哪个标签更新时，仍会显示标签冲突提示。",
+  dateFilter: "日期",
+  dateRanges: {
+    any: "不限制",
+    today: "今天",
+    "3days": "3 天内",
+    week: "本周",
+    month: "当月",
+  },
   settingsTitle: "设置",
   generalSettings: "通用",
   groups: "分组",
@@ -610,6 +618,14 @@ const en: typeof zh = {
   exclusiveStatusLabels: "Exclusive status labels (newest replaces old)",
   exclusiveStatusHint:
     "When a task gains a new status label outside Workboard, remove the previous status label and keep only the latest group. Only labels configured as groups below are affected; ordinary labels are untouched. Conflicts whose newest label cannot be determined still raise the banner.",
+  dateFilter: "Date",
+  dateRanges: {
+    any: "Any time",
+    today: "Today",
+    "3days": "Last 3 days",
+    week: "This week",
+    month: "This month",
+  },
   settingsTitle: "Settings",
   generalSettings: "General",
   groups: "Groups",
