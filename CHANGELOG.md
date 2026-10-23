@@ -4,6 +4,13 @@
 
 All notable changes are documented here.
 
+## 0.3.2 — 2026-10-23
+
+- Add a dedicated Workboard icon and packaged English/Chinese plugin overviews for the Paseo directory.
+- Refresh bilingual screenshots and add short GIF demonstrations for view switching, date filtering, task moves and undo; clarify settings, data access and limitations in the guides.
+- Raise the minimum Paseo version to `>=0.11.0` for icon and media metadata. Users on older hosts must upgrade Paseo before installing this version.
+- Validate the exact package file list, icon dimensions and referenced media. Runtime behavior, RPC contracts, storage and SDK versions are unchanged from 0.3.1.
+
 ## 0.3.1 — 2026-10-23
 
 - Add optional exclusive status labels: a new status label added outside Workboard replaces the previous one, preserving unrelated labels and leaving ambiguous conflicts for manual resolution. Disabled by default.

@@ -4,6 +4,12 @@ English: [English](../verification.md)
 
 本文记录 Workboard 当前可复现的验证证据，不代表已经覆盖全部 Paseo 平台、主题或宿主集成。
 
+## 0.3.2 发布候选（2026-10-23，未发布）
+
+在 macOS arm64、Node 22.22.2 上，`check` 通过 28 个文件的 414 项测试，`format:check` 与 `check:package` 通过。实际 tarball 包含 52 个批准文件（3,483,258 bytes），逐项与已审阅源码字节一致，SHA-256 为 `6bd1a8cc49d3815fb03e037e246104d1f58eacd3b18be1d0a82fe6409336edbc`。
+
+解压包未安装开发依赖，安装后报告 `running`，并在 Paseo 0.12.0-beta.3 上通过 13 项隔离测试，总耗时 81.60s。带 marker、仅监听 loopback 的 daemon 已停止。本轮仅准备发布元数据，未重复下述视觉检查。本机没有精确最低宿主 0.11.0，仍未验证；本地检查也不代表 CI、npm 安装或 registry 页面渲染已验证。发布等待用户批准。
+
 ## 插件介绍与素材更新（2026-10-23，未发布）
 
 本地介绍页更新在 macOS arm64、Node 22.22.2 上通过 `check`（28 个文件、414 项测试）、`format:check` 和 `check:package`。源码安装在 Paseo 0.12.0-beta.3 上通过全部 13 项隔离集成测试，耗时 77.13s。这与下面较早的发布候选验证是两次独立检查。

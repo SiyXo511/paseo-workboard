@@ -6,6 +6,20 @@ This document records the current reproducible evidence for Workboard. It is
 not a claim that every Paseo platform, theme, or host integration has been
 tested.
 
+## 0.3.2 release candidate (2026-10-23, unpublished)
+
+On macOS arm64 with Node 22.22.2, `check` passed 414 tests in 28 files;
+`format:check` and `check:package` passed. The actual tarball has 52 approved
+files (3,483,258 bytes), each byte-matching the reviewed source. Its SHA-256 is
+`6bd1a8cc49d3815fb03e037e246104d1f58eacd3b18be1d0a82fe6409336edbc`.
+
+The unpacked package, without development dependencies, installed as `running`
+and passed all 13 isolated tests on Paseo 0.12.0-beta.3 in 81.60s. The marked
+loopback-only daemon was stopped afterward. This metadata-only preparation did
+not repeat the visual checks below. The exact minimum host 0.11.0 is unavailable
+locally and remains untested. CI, npm installation and registry rendering are
+not verified by these local checks. Publication is pending user approval.
+
 ## Listing and media update (2026-10-23, unpublished)
 
 The local listing update passed `check` (414 tests in 28 files),
