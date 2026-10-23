@@ -1,7 +1,7 @@
 {
   "name": "paseo-workboard",
   "version": "0.3.1",
-  "description": "Workspace tasks, draft todos and a label-linked kanban for Paseo",
+  "description": "Workspace tasks and draft ideas in a label-linked board or list for Paseo",
   "license": "MIT",
   "author": "fxbing",
   "homepage": "https://github.com/fxbing/paseo-workboard#readme",
@@ -39,7 +39,10 @@
     "README.zh-CN.md",
     "CHANGELOG.md",
     "CHANGELOG.zh-CN.md",
-    "LICENSE"
+    "LICENSE",
+    "OVERVIEW.md",
+    "OVERVIEW.zh-CN.md",
+    "images/"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",

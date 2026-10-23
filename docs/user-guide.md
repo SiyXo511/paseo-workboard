@@ -37,6 +37,10 @@ Use the status menu or drag a desktop card by its handle. Moving a bound task up
 
 Board dragging starts after 6px, shows a card preview, highlights a target, and autoscrolls near the horizontal edge. Press `Esc`, leave the window, or release outside the board to cancel. Each group initially uses last activity: bound tasks use the last verified conversation, drafts use their last edit, and workspaces with no conversation stay last. Drag within a desktop column to save an order, using the vertical insertion line; the list scrolls near its top or bottom edge. Narrow layouts offer up/down controls and Alt+Up/Down. With filters, the chosen visible neighbor is an anchor: only the selected task moves, while other tasks keep their relative order. A pending reorder locks that column's ordering controls. Concurrent membership/order changes reject the request, clear its preview, and refresh the board. New cards appear at the tail in activity order. A card returning to a column keeps its saved position until another manual reorder compacts that column's current IDs. Use **Restore activity order** in the group menu to reset. Saved order is shared across clients and survives reload. Ordering does not edit task timestamps, labels, pinning, conversation evidence or archive gates; cross-column moves continue to use the status mutation and undo.
 
+For external label changes, **Exclusive status labels** in Settings is optional and off by default. When Paseo adds one new managed status label alongside the task's previously known label, Workboard can identify the new choice and remove the old managed label. Other labels remain. If the previous status is unknown or several additions make the latest choice ambiguous, Workboard keeps the conflict for manual resolution.
+
+![Move a fictional task and undo the move](../images/move-undo-en.gif)
+
 ## Use the board and list
 
 On desktop and Web, Workboard follows Paseo's language setting. Chinese and English are supported; other Paseo languages fall back to English. When Paseo follows the system language, Workboard follows the same locale selection. There is no separate plugin language setting. Built-in group names and dates change with the UI; custom group names, task titles and notes stay as entered.
@@ -58,6 +62,18 @@ The List view scrolls vertically through every group, including empty groups. Ea
 In the desktop Board, groups can be reordered, resized, collapsed, colored, and located. Pressing a column title opens group options. Drag its title to reorder, or use Alt/Meta+Left/Right Arrow; plain arrows do not commit a reorder. Group reordering has no undo entry yet; move it back manually. Resize handles widen and use the accent color on hover or focus; arrows change width and Home resets it. Column width and collapsed state are local client preferences scoped to the current host. Collapsing only changes the display. A successful card drop into a collapsed group expands it again.
 
 In the Board, the locate-groups button opens a group list. Selecting a desktop group expands it and scrolls to its column; on a narrow layout it selects that group. Only the Board view uses one group at a time on narrow layouts; the List view keeps all groups visible as compact rows. Active filters show a rounded count badge, distinct from the Archive count. In the narrow Board, arrow keys move between groups, and `Home` and `End` jump to the first or last group.
+
+The **Date** filter uses the displayed last conversation time. **Today** starts at local midnight; **Last 3 days** includes today and the two previous calendar days; **This week** starts Monday; **This month** starts on the first. Tasks without a conversation date do not match a date range. Date ranges filter the displayed task list; they do not alter archive eligibility.
+
+![Filters with date range options](../images/filters-en.png)
+
+![Switch between views and apply a date filter](../images/views-filter-en.gif)
+
+The grouped list and Settings screens are shown below with fictional tasks.
+
+![Grouped list](../images/list-en.png)
+
+![Workboard settings](../images/settings-en.png)
 
 ## Configure groups
 

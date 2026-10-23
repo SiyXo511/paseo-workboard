@@ -6,6 +6,36 @@ This document records the current reproducible evidence for Workboard. It is
 not a claim that every Paseo platform, theme, or host integration has been
 tested.
 
+## Listing and media update (2026-10-23, unpublished)
+
+The local listing update passed `check` (414 tests in 28 files),
+`format:check`, and `check:package` on macOS arm64 with Node 22.22.2.
+The source installation passed all 13 isolated integration tests in 77.13s
+on Paseo 0.12.0-beta.3. This is separate from the earlier release candidate.
+
+Chrome exercised the English and Chinese board, list, date filter, and
+drag-and-undo flow in a marked, loopback-only disposable home. Fictional
+workspaces and a deterministic fixture provider supplied the demonstration
+data; no model requests or personal task data were used. Today selected four
+dated tasks out of seven, excluding the three unbound drafts; clearing the
+filter restored all seven. Moving a task to Review and undoing returned it to
+In progress. Settings screenshots show the exclusive-label and archive switches
+off; these switches were not visually toggled in this pass.
+
+The PNGs are captured UI views. The GIFs sequence actual captured states with
+reading pauses (about 12s for filtering and 9s for moving), rather than continuous
+screen recordings. All four are below 0.4 MB. The 512px PNG icon was also
+inspected at 24, 32, and 64px on light and dark backgrounds.
+
+The local tarball contains 52 approved files, including both overviews and all
+listing assets; every packed file matched its source bytes. Installing the
+unpacked tarball without development dependencies in the disposable daemon
+reported `running`. The icon/media
+metadata raises the declared minimum to 0.11.0, but that exact host version was
+not available locally and was not tested. This pass does not establish native
+mobile, Electron, registry rendering, publication, or compatibility with every
+host above the minimum. Version 0.3.1 remains unchanged pending release review.
+
 ## 0.3.1 release candidate
 
 On 2026-10-23, the **0.3.1** candidate passed `check`, `format:check` and
