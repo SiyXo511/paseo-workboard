@@ -169,7 +169,6 @@ const zh = {
   archiveDraftConfirm:
     "归档草稿“{name}”？归档后将移出看板，可在归档页放回原分组。",
   autoArchive: "自动归档",
-  autoArchiveMaster: "启用自动归档",
   autoArchiveMigrationPaused:
     "升级时补建了已废弃分组，其标签可能匹配已有 workspace。自动归档已关闭，请核对到期任务后重新开启；存在到期任务时会先要求确认。",
   archiveCanceled: "自动归档已废弃任务",
@@ -606,7 +605,6 @@ const en: typeof zh = {
   archiveDraftConfirm:
     "Archive draft “{name}”? It will leave the board. You can restore it to its original group from Archive.",
   autoArchive: "Automatic archive",
-  autoArchiveMaster: "Enable automatic archive (master switch)",
   autoArchiveMigrationPaused:
     "An upgrade added a Canceled group whose label may match existing workspaces. Automatic archive was turned off. Review due tasks before re-enabling it; due tasks require confirmation first.",
   archiveCanceled: "Automatically archive Canceled tasks",

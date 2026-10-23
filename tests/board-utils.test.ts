@@ -435,7 +435,8 @@ describe("board card selection", () => {
     const settings = {
       ...settingsSchema.parse({}),
       groupOrder: [],
-      autoArchive: true,
+      archiveDoneEnabled: true,
+      archiveCanceledEnabled: true,
       pinInProgressWorkspaces: true,
       groups: DEFAULT_GROUPS.map((group) => ({ ...group, label: group.id })),
     };
@@ -566,6 +567,8 @@ it("returns exactly the due candidates and proposed deadlines used by preview co
     due("conflict", "done", { labels: ["task:done", "task:canceled"] }),
   ];
   const settings = settingsSchema.parse({
+    archiveDoneEnabled: true,
+    archiveCanceledEnabled: true,
     archiveDoneAfterDays: 30,
     archiveCanceledAfterDays: 7,
   });

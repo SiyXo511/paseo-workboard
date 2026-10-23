@@ -790,9 +790,9 @@ it("X-01 disables only the pending settings switch and rejects its repeated call
   expect(byID(page.render(), "workboard-pin-in-progress").props.disabled).toBe(
     true,
   );
-  expect(byID(page.render(), "workboard-auto-archive").props.disabled).toBe(
-    false,
-  );
+  expect(
+    byID(page.render(), "workboard-auto-archive-canceled").props.disabled,
+  ).toBe(false);
   await first.props.onValueChange(false);
   expect(runtime.mutation).toHaveBeenCalledOnce();
   expect(runtime.toast.error).toHaveBeenCalledWith(t.mutationPending);
@@ -941,14 +941,15 @@ it("X-01 sends concurrent settings controls to the actual server and reports its
     const first = byID(tree, "workboard-pin-in-progress").props.onValueChange(
       false,
     );
-    const second = byID(tree, "workboard-auto-archive").props.onValueChange(
-      true,
-    );
+    const second = byID(
+      tree,
+      "workboard-auto-archive-canceled",
+    ).props.onValueChange(true);
     await Promise.all([first, second]);
     expect(runtime.mutation).toHaveBeenCalledTimes(2);
     expect(test.store.current.settings).toMatchObject({
       pinInProgressWorkspaces: false,
-      autoArchive: false,
+      archiveCanceledEnabled: false,
     });
     expect(runtime.toast.error).toHaveBeenCalledWith(
       t.mutationErrors["Settings changed; refresh before saving"],

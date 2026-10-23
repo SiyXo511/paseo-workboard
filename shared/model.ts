@@ -136,12 +136,11 @@ export const groupOrderSchema = z
   });
 const archiveDaysSchema = z.number().int().min(1).max(365);
 const preferences = {
-  autoArchive: z.boolean().default(false),
   archiveMappingNeedsReview: z.boolean().default(false),
   // Retained as the fallback for settings created before terminal rules were independent.
   archiveAfterDays: archiveDaysSchema.default(30),
-  archiveCanceledEnabled: z.boolean().default(true),
-  archiveDoneEnabled: z.boolean().default(true),
+  archiveCanceledEnabled: z.boolean().default(false),
+  archiveDoneEnabled: z.boolean().default(false),
   archiveCanceledAfterDays: archiveDaysSchema.nullable().default(null),
   archiveDoneAfterDays: archiveDaysSchema.nullable().default(null),
   defaultDraftGroup: stageSchema.nullable().default(null),
@@ -319,7 +318,7 @@ export function conversationStatusFor(
  * The stored settings version. The plugin registers this same value, because the host only
  * migrates stored settings when the registered version differs from what it finds.
  */
-export const DATA_SCHEMA_VERSION = 8;
+export const DATA_SCHEMA_VERSION = 9;
 
 export const sourceSchema = z.discriminatedUnion("kind", [
   z.object({

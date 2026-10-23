@@ -6,6 +6,58 @@ This document records the current reproducible evidence for Workboard. It is
 not a claim that every Paseo platform, theme, or host integration has been
 tested.
 
+## Independent switches and obsolete archive warnings (2026-10-23, local follow-up)
+
+The local follow-up to PR #5, based on `8542f67`, removes the master switch
+and supersedes the uncommitted pre-enable setup flow. On macOS arm64 with Node
+**22.22.2** through `mise`:
+
+- Focused settings, archive, defaults, migration, configuration, candidate,
+  interaction, model and startup regressions: **270 tests in 9 files**.
+- `npm run check`: TypeScript and **465 unit tests in 28 files** passed.
+- `npm run format:check`: passed.
+- `npm run check:package`: **52 approved files**, **3,487,595 bytes**.
+- The actual tarball's 52 files match the source byte for byte. SHA-256:
+  `735003ce303a29960d2b79d273d647c49801c8991bd7eb7c4c4b21cfe5a05ba8`.
+- `npm run test:integration`: **13/13 tests**, **22.53 seconds** on the final rerun, on Paseo
+  **0.12.0** in a separate marked, loopback-only temporary home. The test daemon
+  was stopped afterward; the first attempt stopped before tests because the CLI
+  was missing from PATH, then passed with its installed directory supplied.
+- Independent reviews found no actionable issues in either the independent-rule
+  change or the obsolete-deferral fix. A fresh review of all 32 changed files
+  before the local commit also found no actionable issue and independently
+  passed 113 focused tests in 4 files.
+
+The v8→v9 migration regression first failed on unsupported v8 input, then passed
+for all eight master/rule combinations, missing legacy rule fields, delay and
+record preservation, and repeated migration. Workboard/Store fixtures verify
+fresh-install defaults, migrated master-off safety through periodic scans,
+Canceled-only candidates and execution, cancellation, real storage failure,
+concurrent changes, repeated saves, and retained but unapplied hidden input.
+Legacy v1–v7 repair safety remains covered. Candidate tests still verify exact
+count/list agreement, both statuses, all 42 items, empty lists and invalidation.
+
+The P3 warning issue was reproduced: disabling one/both rules or extending the
+period returned a snapshot with the old `git-dirty` warning. All three cases
+failed before the fix. Archive regressions now check immediate and refreshed
+snapshots, off/on at the same clock without an intervening refresh, dirty and
+clean safety paths, preserved independent issues, unknown-gate backoff, failed
+writes and no conversation replay for unrelated preference saves.
+
+The existing isolated preview reloaded successfully: the plugin reports `running`,
+page and script responses are HTTP 200, and the bundle contains the independent
+controls without the master or setup flow. Its real v8→v9 migration retained
+effective rule states and every delay; both pre-existing synthetic tasks remain
+archived. Preview verification used HTTP/SDK reads, not rendered UI interaction.
+
+These results are local validation, not CI or publication evidence. Bilingual
+README/guide cleanup is preserved and updated for the two independent switches.
+Obsolete settings
+screenshot embeds and their caveats are removed; the old assets and manifest
+media references remain unchanged and do not depict this flow. No live screen
+was viewed or captured; rendered layout, keyboard and screen-reader behavior,
+minimum-host compatibility, and CI are not claimed for this revision.
+
 ## Independent archive rules and confirmation (2026-10-23)
 
 The PR #5 follow-up integrates main at `4360016` and passed on macOS arm64
@@ -36,7 +88,7 @@ checks while preserving synthetic state. The user accepted the local preview.
 No live screen was viewed or captured by the agent; rendered keyboard and
 screen-reader behavior and the full host integration suite were not rechecked.
 The inherited `images/settings-en.png` and `images/settings-zh-CN.png` predate
-this archive layout and remain stale, as noted in both guides. Other inherited
+this archive layout and were then marked stale in both guides. Other inherited
 media is unchanged. The historical records below describe different revisions;
 their host and visual results do not establish those results for this follow-up.
 

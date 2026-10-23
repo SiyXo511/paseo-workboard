@@ -333,7 +333,12 @@ describe("isolated Paseo workboard", () => {
       expect(colored.settings.pinInProgressWorkspaces).toBe(
         initial.settings.pinInProgressWorkspaces,
       );
-      expect(colored.settings.autoArchive).toBe(initial.settings.autoArchive);
+      expect(colored.settings.archiveDoneEnabled).toBe(
+        initial.settings.archiveDoneEnabled,
+      );
+      expect(colored.settings.archiveCanceledEnabled).toBe(
+        initial.settings.archiveCanceledEnabled,
+      );
       expect(await nativeLabels(workspaceId)).toEqual(labelsBeforeColor);
       const groupOrder = orderedGroups(colored.settings).map(
         (group) => group.id,
@@ -359,7 +364,12 @@ describe("isolated Paseo workboard", () => {
       expect(restarted.settings.pinInProgressWorkspaces).toBe(
         initial.settings.pinInProgressWorkspaces,
       );
-      expect(restarted.settings.autoArchive).toBe(initial.settings.autoArchive);
+      expect(restarted.settings.archiveDoneEnabled).toBe(
+        initial.settings.archiveDoneEnabled,
+      );
+      expect(restarted.settings.archiveCanceledEnabled).toBe(
+        initial.settings.archiveCanceledEnabled,
+      );
       expect(restarted.cards.find((card) => card.id === cardId)?.stage).toBe(
         first.id,
       );
@@ -874,7 +884,10 @@ describe("isolated Paseo workboard", () => {
       assigned: true,
     });
 
-    await updateSettings({ autoArchive: true });
+    await updateSettings({
+      archiveDoneEnabled: true,
+      archiveCanceledEnabled: true,
+    });
     const archived = await eventually(
       snapshot,
       (board) =>
@@ -1018,7 +1031,10 @@ describe("isolated Paseo workboard", () => {
       label: { name: "task:done", color: "emerald" },
       assigned: true,
     });
-    await updateSettings({ autoArchive: true });
+    await updateSettings({
+      archiveDoneEnabled: true,
+      archiveCanceledEnabled: true,
+    });
     const observed = await eventually(
       snapshot,
       (board) =>
@@ -1046,7 +1062,10 @@ describe("isolated Paseo workboard", () => {
   });
 
   test("automatically archives a clean, upstreamed Paseo managed worktree", async () => {
-    await updateSettings({ autoArchive: false });
+    await updateSettings({
+      archiveDoneEnabled: false,
+      archiveCanceledEnabled: false,
+    });
     const root = path.join(
       home,
       "integration-managed-worktree",
@@ -1134,7 +1153,10 @@ describe("isolated Paseo workboard", () => {
       label: { name: "task:done", color: "emerald" },
       assigned: true,
     });
-    await updateSettings({ autoArchive: true });
+    await updateSettings({
+      archiveDoneEnabled: true,
+      archiveCanceledEnabled: true,
+    });
     const archived = await eventually(
       snapshot,
       (board) =>

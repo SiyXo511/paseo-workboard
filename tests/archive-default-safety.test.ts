@@ -7,9 +7,72 @@ import {
 import { migrateData } from "../shared/migrations";
 import { fixture, observed, workspace } from "./fixtures";
 
+it.each([
+  [false, true, true, []],
+  [true, false, true, ["canceled"]],
+  [true, true, false, ["done"]],
+  [true, true, true, ["done", "canceled"]],
+  [null, false, false, []],
+] as const)(
+  "preserves effective legacy archive rules through startup and periodic scans: master=%s Done=%s Canceled=%s",
+  async (master, done, canceled, expected) => {
+    vi.useFakeTimers();
+    const test = fixture(
+      master === null
+        ? {}
+        : migrateData(
+            {
+              schemaVersion: 8,
+              settings: {
+                autoArchive: master,
+                archiveDoneEnabled: done,
+                archiveCanceledEnabled: canceled,
+                archiveDoneAfterDays: 7,
+                archiveCanceledAfterDays: 14,
+              },
+            },
+            8,
+          ),
+    );
+    for (const kind of ["done", "canceled"]) {
+      test.inventory.workspaces.push(workspace(kind, kind, [`task:${kind}`]));
+      test.inventory.agents.push({
+        id: `${kind}-agent`,
+        workspaceId: kind,
+        title: null,
+        activity: "idle",
+        updatedAt: "2026-08-01T00:00:00Z",
+        lastUserMessageAt: "2026-08-01T00:00:00Z",
+      });
+    }
+    test.host.conversation = async () => observed("2026-08-01T00:00:00Z");
+    try {
+      await test.board.start();
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(
+        vi
+          .mocked(test.host.archive)
+          .mock.calls.map(([id]) => id)
+          .sort(),
+      ).toEqual([...expected].sort());
+      expect(test.store.current.settings).toMatchObject({
+        archiveDoneEnabled: !!master && done,
+        archiveCanceledEnabled: !!master && canceled,
+      });
+    } finally {
+      test.board.dispose();
+      vi.useRealTimers();
+    }
+  },
+);
+
 function expired(defaultStartGroup: string, gate: "exact" | "upper-bound") {
   const test = fixture({
-    settings: settingsSchema.parse({ autoArchive: true, defaultStartGroup }),
+    settings: settingsSchema.parse({
+      archiveDoneEnabled: true,
+      archiveCanceledEnabled: true,
+      defaultStartGroup,
+    }),
   });
   test.inventory.workspaces.push(workspace("w"));
   test.inventory.agents.push({
@@ -141,7 +204,8 @@ it("pauses autoarchive only when migration must add a canceled mapping and preve
     await boardTest.board.start();
     expect(boardTest.host.archive).not.toHaveBeenCalled();
     expect(boardTest.store.current.settings).toMatchObject({
-      autoArchive: false,
+      archiveDoneEnabled: false,
+      archiveCanceledEnabled: false,
       archiveMappingNeedsReview: true,
     });
     expect(boardTest.board.snapshot().cards[0]).toMatchObject({
@@ -154,7 +218,7 @@ it("pauses autoarchive only when migration must add a canceled mapping and preve
       action: "settings",
       revision: current.revision,
       expectedSettings: current.settings,
-      settings: { ...current.settings, autoArchive: true },
+      settings: { ...current.settings, archiveCanceledEnabled: true },
     });
     await boardTest.board.refresh();
     expect(boardTest.host.archive).toHaveBeenCalledExactlyOnceWith("w");
@@ -167,6 +231,6 @@ it("pauses autoarchive only when migration must add a canceled mapping and preve
   for (const autoArchive of [true, false])
     expect(
       migrateData({ schemaVersion: 6, settings: { autoArchive } }, 6).settings
-        .autoArchive,
+        .archiveCanceledEnabled,
     ).toBe(autoArchive);
 });

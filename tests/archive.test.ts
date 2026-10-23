@@ -8,7 +8,10 @@ import { newTask } from "../shared/model";
 afterEach(() => vi.useRealTimers());
 function dueFixture() {
   const test = fixture({
-    settings: settingsSchema.parse({ autoArchive: true }),
+    settings: settingsSchema.parse({
+      archiveDoneEnabled: true,
+      archiveCanceledEnabled: true,
+    }),
   });
   test.inventory.workspaces.push(workspace("old", undefined, ["task:done"]));
   test.inventory.agents.push({
@@ -264,7 +267,10 @@ it("keeps native timeout/partial failure uncertain across restart and never send
  */
 function vanishedChildFixture(lastObservedAt: string | null) {
   const test = fixture({
-    settings: settingsSchema.parse({ autoArchive: true }),
+    settings: settingsSchema.parse({
+      archiveDoneEnabled: true,
+      archiveCanceledEnabled: true,
+    }),
     tasks: [
       {
         ...newTask("task", "Old task", "2026-08-01T00:00:00Z", "done"),
@@ -333,7 +339,7 @@ it("does not leave a v5-migrated task permanently blocked by a never-observed le
       schemaVersion: 5,
       revision: 1,
       serverId: "fixture-host",
-      settings: settingsSchema.parse({ autoArchive: true }),
+      settings: { autoArchive: true },
       tasks: [
         {
           ...newTask("task", "Old task", "2026-08-01T00:00:00Z", "done"),
@@ -410,6 +416,216 @@ it("shares scan inventory and exponentially defers unchanged unsafe candidates u
     expect(test.store.current).not.toHaveProperty("archiveDeferrals");
   } finally {
     board.dispose();
+  }
+});
+
+it.each([
+  { archiveDoneEnabled: false },
+  { archiveDoneEnabled: false, archiveCanceledEnabled: false },
+  { archiveDoneAfterDays: 90 },
+])(
+  "clears obsolete archive warnings in the settings response before backoff expires: %j",
+  async (change) => {
+    const test = dueFixture();
+    test.inventory.workspaces.push(
+      workspace("canceled", undefined, ["task:canceled"]),
+    );
+    test.inventory.agents.push({
+      ...test.inventory.agents[0],
+      id: "c",
+      workspaceId: "canceled",
+    });
+    test.host.safety = vi.fn(async () => "git-dirty");
+    test.host.conversation = vi.fn(test.host.conversation);
+    try {
+      await test.board.start();
+      expect(
+        test.board.snapshot().cards.every((card) => card.issue === "git-dirty"),
+      ).toBe(true);
+      vi.mocked(test.host.conversation).mockClear();
+      const before = test.board.snapshot();
+      const saved = await test.board.mutate({
+        action: "settings",
+        revision: before.revision,
+        expectedSettings: before.settings,
+        settings: { ...before.settings, ...change },
+      });
+      expect(
+        saved.cards.find((card) => card.workspaceId === "old")?.issue,
+      ).toBe(null);
+      expect(test.host.conversation).not.toHaveBeenCalled();
+      expect(
+        saved.cards.find((card) => card.workspaceId === "canceled")?.issue,
+      ).toBe("archiveCanceledEnabled" in change ? null : "git-dirty");
+      await test.board.refresh();
+      expect(test.board.snapshot().cards.map((card) => card.issue)).toEqual(
+        saved.cards.map((card) => card.issue),
+      );
+      expect(test.host.safety).toHaveBeenCalledTimes(2);
+      expect(test.host.archive).not.toHaveBeenCalled();
+    } finally {
+      test.board.dispose();
+    }
+  },
+);
+
+it.each([true, false])(
+  "rechecks safety after disabling and re-enabling without an intervening refresh at the same clock: dirty=%s",
+  async (dirty) => {
+    const test = dueFixture();
+    test.host.safety = vi.fn(async () => "git-dirty");
+    test.host.conversation = vi.fn(test.host.conversation);
+    const setDone = async (enabled: boolean) => {
+      const before = test.board.snapshot();
+      return test.board.mutate({
+        action: "settings",
+        revision: before.revision,
+        expectedSettings: before.settings,
+        settings: { ...before.settings, archiveDoneEnabled: enabled },
+      });
+    };
+    try {
+      await test.board.start();
+      expect((await setDone(false)).cards[0].issue).toBe(null);
+      vi.mocked(test.host.safety).mockResolvedValue(dirty ? "git-dirty" : null);
+      vi.mocked(test.host.safety).mockClear();
+      vi.mocked(test.host.conversation).mockClear();
+      await setDone(true);
+      expect(test.host.conversation).not.toHaveBeenCalled();
+      await test.board.refresh();
+      expect(test.host.conversation).toHaveBeenCalledTimes(2);
+      expect(test.host.safety).toHaveBeenCalledTimes(dirty ? 1 : 2);
+      if (dirty) {
+        expect(test.host.archive).not.toHaveBeenCalled();
+        expect(test.board.snapshot().cards[0].issue).toBe("git-dirty");
+      } else {
+        expect(test.host.archive).toHaveBeenCalledExactlyOnceWith("old");
+      }
+    } finally {
+      test.board.dispose();
+    }
+  },
+);
+
+it("preserves applicable backoff and skips history on unrelated settings saves", async () => {
+  const test = dueFixture();
+  test.host.safety = vi.fn(async () => "git-dirty");
+  test.host.conversation = vi.fn(test.host.conversation);
+  try {
+    await test.board.start();
+    vi.mocked(test.host.conversation).mockClear();
+    const before = test.board.snapshot();
+    const saved = await test.board.mutate({
+      action: "settings",
+      revision: before.revision,
+      expectedSettings: before.settings,
+      settings: { ...before.settings, pinInProgressWorkspaces: false },
+    });
+    expect(saved.cards[0].issue).toBe("git-dirty");
+    await test.board.refresh();
+    expect(test.host.conversation).not.toHaveBeenCalled();
+    expect(test.host.safety).toHaveBeenCalledTimes(1);
+  } finally {
+    test.board.dispose();
+  }
+});
+
+it("does not treat an unknown conversation gate as evidence that a longer delay is not due", async () => {
+  const test = dueFixture();
+  let clock = test.now();
+  const board = new Workboard(test.host, test.store, () => clock);
+  test.host.safety = vi.fn(async () => "git-dirty");
+  try {
+    await board.start();
+    test.host.conversation = vi.fn(agentEvidence(null));
+    clock += 60_000;
+    await board.refresh();
+    expect(board.snapshot().cards[0]).toMatchObject({
+      conversationGateEvidence: "unknown",
+      issue: "no-conversation",
+    });
+    const before = board.snapshot();
+    const saved = await board.mutate({
+      action: "settings",
+      revision: before.revision,
+      expectedSettings: before.settings,
+      settings: { ...before.settings, archiveDoneAfterDays: 90 },
+    });
+    expect(saved.cards[0].issue).toBe("no-conversation");
+    await board.refresh();
+    expect(test.host.conversation).toHaveBeenCalledTimes(1);
+    const disabled = await board.mutate({
+      action: "settings",
+      revision: saved.revision,
+      expectedSettings: saved.settings,
+      settings: { ...saved.settings, archiveDoneEnabled: false },
+    });
+    expect(disabled.cards[0].issue).toBe("no-conversation");
+    expect(test.host.archive).not.toHaveBeenCalled();
+  } finally {
+    board.dispose();
+  }
+});
+
+it("keeps an independent issue when clearing an owned archive deferral and checks new rules before refresh backoff", async () => {
+  const test = dueFixture();
+  test.host.safety = vi.fn(async () => "git-dirty");
+  try {
+    await test.board.start();
+    await test.store.update((data) => {
+      data.tasks[0].issue = "labels-conflict";
+    });
+    const before = test.board.snapshot();
+    const saved = await test.board.mutate({
+      action: "settings",
+      revision: before.revision,
+      expectedSettings: before.settings,
+      settings: { ...before.settings, archiveDoneEnabled: false },
+    });
+    expect(saved.cards[0].issue).toBe("labels-conflict");
+    // Simulate a loaded rule change while an in-memory deferral still exists.
+    await test.store.update((data) => {
+      data.settings.archiveDoneEnabled = true;
+    });
+    await test.board.refresh();
+    expect(test.board.snapshot().cards[0].issue).toBe("git-dirty");
+    await test.store.update((data) => {
+      data.settings.archiveDoneEnabled = false;
+    });
+    await test.board.refresh();
+    expect(test.board.snapshot().cards[0].issue).toBe(null);
+    expect(test.host.archive).not.toHaveBeenCalled();
+  } finally {
+    test.board.dispose();
+  }
+});
+
+it("keeps the existing deferral when saving the disabling rule fails", async () => {
+  const test = dueFixture();
+  test.host.safety = vi.fn(async () => "git-dirty");
+  test.host.conversation = vi.fn(test.host.conversation);
+  try {
+    await test.board.start();
+    vi.mocked(test.host.conversation).mockClear();
+    vi.spyOn(test.backing, "write").mockRejectedValueOnce(
+      new Error("storage failed"),
+    );
+    const before = test.board.snapshot();
+    await expect(
+      test.board.mutate({
+        action: "settings",
+        revision: before.revision,
+        expectedSettings: before.settings,
+        settings: { ...before.settings, archiveDoneEnabled: false },
+      }),
+    ).rejects.toThrow("storage failed");
+    expect(test.store.current.settings.archiveDoneEnabled).toBe(true);
+    expect(test.board.snapshot().cards[0].issue).toBe("git-dirty");
+    await test.board.refresh();
+    expect(test.host.conversation).not.toHaveBeenCalled();
+    expect(test.host.safety).toHaveBeenCalledTimes(1);
+  } finally {
+    test.board.dispose();
   }
 });
 

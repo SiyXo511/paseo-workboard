@@ -49,7 +49,13 @@ describe("task stages and conversation-based expiry", () => {
     expect(isArchiveDue("done", conversation, boundary + 1, null)).toBe(false);
   });
   it("uses the shared legacy delay as each terminal rule's fallback", () => {
-    const legacy = settingsSchema.parse({ archiveAfterDays: 14 });
+    const legacy = migrateData(
+      {
+        schemaVersion: 8,
+        settings: { autoArchive: true, archiveAfterDays: 14 },
+      },
+      8,
+    ).settings;
     expect(legacy).toMatchObject({
       archiveCanceledEnabled: true,
       archiveDoneEnabled: true,
@@ -61,6 +67,7 @@ describe("task stages and conversation-based expiry", () => {
     expect(archiveDelayFor(legacy, "todo")).toBeNull();
 
     const split = settingsSchema.parse({
+      archiveCanceledEnabled: true,
       archiveAfterDays: 30,
       archiveCanceledAfterDays: 7,
       archiveDoneAfterDays: 90,
@@ -108,7 +115,10 @@ describe("task stages and conversation-based expiry", () => {
     expect(conversationStatusFor("unknown")).toBe("unknown");
   });
   it("rejects ambiguous mappings and keeps autoarchive opt-in", () => {
-    expect(settingsSchema.parse({}).autoArchive).toBe(false);
+    expect(settingsSchema.parse({})).toMatchObject({
+      archiveDoneEnabled: false,
+      archiveCanceledEnabled: false,
+    });
     expect(settingsSchema.parse({}).exclusiveStatusLabels).toBe(false);
     expect(
       settingsSchema.safeParse({
@@ -154,7 +164,6 @@ describe("task stages and conversation-based expiry", () => {
     );
     expect(data.settings).toEqual({
       ...settingsSchema.parse({}),
-      autoArchive: false,
       pinInProgressWorkspaces: true,
       groups: DEFAULT_GROUPS,
       groupOrder: [],

@@ -6,7 +6,9 @@ All notable changes are documented here.
 
 ## Unreleased
 
-- Group automatic archive in its own section with a standalone master switch above Done and Canceled rules. Turning a switch off collapses its subordinate controls and retains settings and draft input; re-enabling the master previews both rules together. Show each delay once with Save inline beside its input, without the extra hierarchy line or master explanation.
+- Replace the archive master switch with independent Done/Canceled switches, both off by default. Schema v9 preserves legacy effective rule states and delays; enabling one rule cannot temporarily enable the other.
+- Clear obsolete archive deferrals and their owned warnings when settings disable a rule or make a known task no longer due, including the save response. Re-enabling rechecks safety without inheriting the old wait; unrelated issues and unknown evidence remain protected.
+- Group archive rules in their own section. Disabled rules collapse their delay controls while retaining saved values and input drafts. Show Save inline beside each input.
 - Preview proposed archive settings and require confirmation before enabling rules or shortening delays that make tasks due; cancel without saving and invalidate stale confirmations. Show every due task with its title, status, conversation evidence, and proposed archive deadline in a scrollable list.
 - Add independent enable controls and delays for Done and Canceled automatic archive, with per-state due counts and a compatibility fallback for the former shared delay.
 

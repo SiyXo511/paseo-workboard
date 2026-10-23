@@ -261,7 +261,10 @@ export function GroupEditor({
           Date.now(),
         )
       }
-      autoArchive={board.settings.autoArchive}
+      autoArchive={
+        board.settings.archiveDoneEnabled ||
+        board.settings.archiveCanceledEnabled
+      }
     />
   );
 }

@@ -17,11 +17,58 @@ import {
 } from "../shared/model";
 import { mutationSchema } from "../shared/rpc";
 
+it("migrates legacy archive gates to independent effective rules without losing delays", () => {
+  for (const autoArchive of [false, true])
+    for (const archiveDoneEnabled of [false, true])
+      for (const archiveCanceledEnabled of [false, true]) {
+        const previous = {
+          schemaVersion: 8,
+          settings: {
+            autoArchive,
+            archiveDoneEnabled,
+            archiveCanceledEnabled,
+            archiveAfterDays: 45,
+            archiveDoneAfterDays: 12,
+            archiveCanceledAfterDays: null,
+          },
+          tasks: [newTask("idea", "Keep me", "2026-09-23T00:00:00Z")],
+          cardOrderByStage: { todo: ["idea"] },
+        };
+        const migrated = migrateData(previous, 8);
+        expect(migrated.settings).toMatchObject({
+          archiveDoneEnabled: autoArchive && archiveDoneEnabled,
+          archiveCanceledEnabled: autoArchive && archiveCanceledEnabled,
+          archiveAfterDays: 45,
+          archiveDoneAfterDays: 12,
+          archiveCanceledAfterDays: null,
+        });
+        expect(migrated.settings).not.toHaveProperty("autoArchive");
+        expect(migrated.tasks).toEqual(previous.tasks);
+        expect(migrated.cardOrderByStage).toEqual(previous.cardOrderByStage);
+        expect(migrateData(migrated, migrated.schemaVersion)).toEqual(migrated);
+      }
+  for (const autoArchive of [false, true]) {
+    const migrated = migrateData(
+      { schemaVersion: 8, settings: { autoArchive } },
+      8,
+    );
+    expect(migrated.settings.archiveDoneEnabled).toBe(autoArchive);
+    expect(migrated.settings.archiveCanceledEnabled).toBe(autoArchive);
+  }
+  expect(settingsSchema.parse({})).toMatchObject({
+    archiveDoneEnabled: false,
+    archiveCanceledEnabled: false,
+  });
+});
+
 it.each(["zh", "en"])(
   "removes the v4 language preference %s while retaining tasks, groups and pin ownership",
   (language) => {
     const settings = {
-      ...settingsSchema.parse({}),
+      ...settingsSchema.parse({
+        archiveDoneEnabled: true,
+        archiveCanceledEnabled: true,
+      }),
       autoArchive: true,
       pinInProgressWorkspaces: false,
       groups: [
@@ -48,7 +95,7 @@ it.each(["zh", "en"])(
     expect(migrated).toEqual({
       ...previous,
       schemaVersion: DATA_SCHEMA_VERSION,
-      settings,
+      settings: settingsSchema.parse(settings),
       cardOrderByStage: {},
     });
     expect(migrated.settings).not.toHaveProperty("language");
@@ -132,7 +179,8 @@ it("adds Inbox to v2 without replacing colliding custom groups, labels, order or
   ]);
   expect(result.tasks).toEqual(previous.tasks);
   expect(result.settings).toMatchObject({
-    autoArchive: true,
+    archiveDoneEnabled: true,
+    archiveCanceledEnabled: true,
     pinInProgressWorkspaces: false,
   });
   expect(result.revision).toBe(9);
@@ -185,7 +233,8 @@ it("migrates v1 settings, task identities, pending binding and archived history 
     revision: 42,
     serverId: "fixture-host",
     settings: {
-      autoArchive: true,
+      archiveDoneEnabled: true,
+      archiveCanceledEnabled: true,
       pinInProgressWorkspaces: false,
       groupOrder: [],
     },
@@ -204,7 +253,7 @@ it("migrates v1 settings, task identities, pending binding and archived history 
 });
 
 it("rejects unsupported storage and ambiguous legacy mappings instead of replacing data", () => {
-  expect(() => migrateData({}, DATA_SCHEMA_VERSION)).toThrow(
+  expect(() => migrateData({}, DATA_SCHEMA_VERSION + 1)).toThrow(
     "unsupported-storage-version",
   );
   expect(() => migrateData({ schemaVersion: 2 }, 1)).toThrow();
@@ -218,7 +267,7 @@ it("rejects unsupported storage and ambiguous legacy mappings instead of replaci
 
 it("classifies unsupported versions and unparseable data as deterministic, not transient", () => {
   for (const [values, fromVersion] of [
-    [{}, DATA_SCHEMA_VERSION],
+    [{}, DATA_SCHEMA_VERSION + 1],
     [{ schemaVersion: 2 }, 1],
     [{ settings: { labels: { ...DEFAULT_LABELS, done: "task:todo" } } }, 1],
   ] as const) {
@@ -229,7 +278,7 @@ it("classifies unsupported versions and unparseable data as deterministic, not t
       caught = error;
     }
     expect(caught).toBeInstanceOf(
-      fromVersion === DATA_SCHEMA_VERSION
+      fromVersion === DATA_SCHEMA_VERSION + 1
         ? UnsupportedStorageVersionError
         : InvalidStorageDataError,
     );
@@ -237,11 +286,11 @@ it("classifies unsupported versions and unparseable data as deterministic, not t
 });
 
 it("preserves the unsupported-version message and stable error code through the wrapper", () => {
-  expect(() => migrateData({}, DATA_SCHEMA_VERSION)).toThrow(
+  expect(() => migrateData({}, DATA_SCHEMA_VERSION + 1)).toThrow(
     "unsupported-storage-version",
   );
   try {
-    migrateData({}, DATA_SCHEMA_VERSION);
+    migrateData({}, DATA_SCHEMA_VERSION + 1);
     expect.unreachable();
   } catch (error) {
     expect(error).toBeInstanceOf(UnsupportedStorageVersionError);
@@ -332,7 +381,7 @@ it("rejects ambiguous labels or identities and missing default destinations", ()
   ).toBe(false);
 });
 
-it("migrates v6 through v7 to v8 without discarding observed agents, notes or preferences", () => {
+it("migrates v6 through v9 without discarding observed agents, notes or preferences", () => {
   const task = {
     ...newTask("t", "Task", "2026-09-01T00:00:00Z"),
     description: "Keep notes",
@@ -359,7 +408,8 @@ it("migrates v6 through v7 to v8 without discarding observed agents, notes or pr
     schemaVersion: DATA_SCHEMA_VERSION,
     revision: 12,
     settings: {
-      autoArchive: true,
+      archiveDoneEnabled: true,
+      archiveCanceledEnabled: true,
       pinInProgressWorkspaces: false,
       archiveAfterDays: 30,
       defaultDraftGroup: null,
@@ -421,7 +471,7 @@ it("adds a noncolliding canceled group for valid legacy settings that removed al
   }
 });
 
-it("runs the complete v1 to v8 chain with new settings and empty merge records", () => {
+it("runs the complete v1 to v9 chain with new settings and empty merge records", () => {
   const result = migrateData(
     {
       schemaVersion: 1,
@@ -435,7 +485,8 @@ it("runs the complete v1 to v8 chain with new settings and empty merge records",
     archiveAfterDays: 30,
     defaultDraftGroup: null,
     defaultStartGroup: null,
-    autoArchive: true,
+    archiveDoneEnabled: true,
+    archiveCanceledEnabled: true,
     pinInProgressWorkspaces: false,
   });
   expect(result.tasks[0]).toMatchObject({ id: "legacy", mergedDrafts: [] });

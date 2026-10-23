@@ -148,7 +148,7 @@ function board(
 }
 
 it.each([
-  ["automatic archive", "workboard-auto-archive", "autoArchive", true],
+  ["Done archive", "workboard-auto-archive-done", "archiveDoneEnabled", true],
   [
     "In progress sidebar pinning",
     "workboard-pin-in-progress",
@@ -165,7 +165,7 @@ it.each([
   "persists %s when its switch changes and keeps it after reopening",
   async (_, testID, key, value) => {
     const settings = settingsSchema.parse({
-      autoArchive: false,
+      archiveDoneEnabled: false,
       pinInProgressWorkspaces: true,
     });
     const initial = board(settings);
@@ -189,8 +189,8 @@ it.each([
         expectedSettings: settings,
         settings: { ...settings, [key]: value },
       },
-      key === "autoArchive"
-        ? "settings:archive"
+      key === "archiveDoneEnabled"
+        ? "settings:done-archive"
         : key === "exclusiveStatusLabels"
           ? "settings:exclusive"
           : "settings:pin",
@@ -207,11 +207,11 @@ it.each([
 );
 
 it("keeps automatic archive off when saving fails", async () => {
-  const initial = board(settingsSchema.parse({ autoArchive: false }));
+  const initial = board(settingsSchema.parse({ archiveDoneEnabled: false }));
   const mutate = vi.fn().mockResolvedValue(undefined);
   const toggle = findByTestId(
     renderSettings(initial, mutate),
-    "workboard-auto-archive",
+    "workboard-auto-archive-done",
   );
 
   await (
@@ -219,18 +219,18 @@ it("keeps automatic archive off when saving fails", async () => {
   ).onValueChange(true);
 
   expect(
-    findByTestId(renderSettings(initial, mutate), "workboard-auto-archive")
+    findByTestId(renderSettings(initial, mutate), "workboard-auto-archive-done")
       .props.value,
   ).toBe(false);
 });
 
 it("adopts a completed save after leaving and reopening while it is pending", async () => {
-  const settings = settingsSchema.parse({ autoArchive: false });
+  const settings = settingsSchema.parse({ archiveDoneEnabled: false });
   const initial = board(settings);
   const saved = {
     ...initial,
     revision: 8,
-    settings: { ...settings, autoArchive: true },
+    settings: { ...settings, archiveDoneEnabled: true },
   };
   let finish!: (result: Board) => void;
   const mutate = vi.fn(
@@ -241,7 +241,7 @@ it("adopts a completed save after leaving and reopening while it is pending", as
   );
   const toggle = findByTestId(
     renderSettings(initial, mutate),
-    "workboard-auto-archive",
+    "workboard-auto-archive-done",
   );
 
   const pending = (
@@ -249,20 +249,20 @@ it("adopts a completed save after leaving and reopening while it is pending", as
   ).onValueChange(true);
   hooks.values = [];
   expect(
-    findByTestId(renderSettings(initial, mutate), "workboard-auto-archive")
+    findByTestId(renderSettings(initial, mutate), "workboard-auto-archive-done")
       .props.value,
   ).toBe(false);
 
   finish(saved);
   await pending;
   expect(
-    findByTestId(renderSettings(saved, mutate), "workboard-auto-archive").props
-      .value,
+    findByTestId(renderSettings(saved, mutate), "workboard-auto-archive-done")
+      .props.value,
   ).toBe(true);
 });
 
 it("requires confirmation before enabling automatic archive with due workspaces", async () => {
-  const settings = settingsSchema.parse({ autoArchive: false });
+  const settings = settingsSchema.parse({ archiveDoneEnabled: false });
   const timestamp = "2026-01-01T00:00:00.000Z";
   const due = {
     ...newTask("task", "Due task", timestamp, "done"),
@@ -286,12 +286,12 @@ it("requires confirmation before enabling automatic archive with due workspaces"
   const saved = {
     ...initial,
     revision: 8,
-    settings: { ...settings, autoArchive: true },
+    settings: { ...settings, archiveDoneEnabled: true },
   };
   const mutate = vi.fn().mockResolvedValue(saved);
   const toggle = findByTestId(
     renderSettings(initial, mutate),
-    "workboard-auto-archive",
+    "workboard-auto-archive-done",
   );
 
   await (
@@ -311,9 +311,9 @@ it("requires confirmation before enabling automatic archive with due workspaces"
       action: "settings",
       revision: 7,
       expectedSettings: settings,
-      settings: { ...settings, autoArchive: true },
+      settings: { ...settings, archiveDoneEnabled: true },
     },
-    "settings:archive",
+    "settings:done-archive",
   );
 });
 
@@ -454,7 +454,6 @@ it.each(["zh", "en"] as const)(
   async (language) => {
     const localized = strings(language);
     const settings = settingsSchema.parse({
-      autoArchive: true,
       archiveAfterDays: 14,
       archiveCanceledAfterDays: 7,
       archiveDoneAfterDays: 90,
@@ -544,7 +543,6 @@ it.each(["zh", "en"] as const)(
   async (language) => {
     const localized = strings(language);
     const settings = settingsSchema.parse({
-      autoArchive: true,
       archiveCanceledEnabled: true,
       archiveDoneEnabled: false,
     });
@@ -766,7 +764,7 @@ it.each(["zh", "en"] as const)(
           onBack: vi.fn(),
         });
       };
-      const toggle = findByTestId(render(), "workboard-auto-archive");
+      const toggle = findByTestId(render(), "workboard-auto-archive-canceled");
       expect(toggle.props.value).toBe(false);
       expect(
         elementText(
@@ -879,6 +877,7 @@ const archiveFixtures: ReturnType<typeof fixture>[] = [];
 afterEach(() => {
   for (const test of archiveFixtures.splice(0)) test.board.dispose();
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 async function archiveSettingsFixture(
@@ -887,7 +886,6 @@ async function archiveSettingsFixture(
 ) {
   const test = fixture({
     settings: settingsSchema.parse({
-      autoArchive: true,
       archiveDoneEnabled: false,
       archiveCanceledEnabled: false,
       ...settings,
@@ -978,6 +976,106 @@ it.each(["done", "canceled"] as const)(
   },
 );
 
+it("keeps migrated master-off tasks safe through periodic scans and enables only Canceled after confirmation", async () => {
+  vi.useFakeTimers();
+  const migrated = migrateData(
+    {
+      schemaVersion: 8,
+      settings: {
+        autoArchive: false,
+        archiveDoneEnabled: true,
+        archiveCanceledEnabled: true,
+        archiveDoneAfterDays: 7,
+        archiveCanceledAfterDays: 14,
+      },
+    },
+    8,
+  );
+  const test = await archiveSettingsFixture(migrated.settings);
+  const original = test.store.current.settings;
+  for (const kind of ["done", "canceled"]) {
+    expect(
+      findByTestId(test.render(), `workboard-auto-archive-${kind}`).props.value,
+    ).toBe(false);
+    expect(() =>
+      findByTestId(test.render(), `workboard-archive-${kind}-days`),
+    ).toThrow("not found");
+  }
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(test.host.archive).not.toHaveBeenCalled();
+  await test.toggle("auto-archive-canceled", true);
+  const rows = findByTestId(test.confirmation(), "workboard-archive-candidates")
+    .props.children as ReactElement[];
+  expect(rows).toHaveLength(1);
+  expect(elementText(rows[0])).toContain("canceled");
+  expect(elementText(rows[0])).not.toContain("done");
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(test.host.archive).not.toHaveBeenCalled();
+  (test.confirmation().props.onClose as () => void)();
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(test.store.current.settings).toEqual(original);
+  expect(test.host.archive).not.toHaveBeenCalled();
+  await test.toggle("auto-archive-canceled", true);
+  await (test.confirmation().props.onConfirm as () => Promise<boolean>)();
+  expect(test.mutate).toHaveBeenCalledTimes(1);
+  expect(test.store.current.settings).toEqual({
+    ...original,
+    archiveCanceledEnabled: true,
+  });
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(test.host.archive).toHaveBeenCalledExactlyOnceWith("canceled");
+  expect(test.inventory.workspaces.map((w) => w.id)).toEqual(["done"]);
+});
+
+it("keeps both rules off on a fresh install and does not apply unsaved hidden delays when enabling", async () => {
+  vi.useFakeTimers();
+  const test = await archiveSettingsFixture(
+    settingsSchema.parse({}),
+    "2026-09-22T00:00:00Z",
+  );
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(test.store.current.settings).toMatchObject({
+    archiveDoneEnabled: false,
+    archiveCanceledEnabled: false,
+  });
+  await test.toggle("auto-archive-canceled", true);
+  (
+    findByTestId(test.render(), "workboard-archive-canceled-days").props
+      .onChangeText as (text: string) => void
+  )("1");
+  await test.toggle("auto-archive-canceled", false);
+  await test.toggle("auto-archive-canceled", true);
+  expect(
+    findByTestId(test.render(), "workboard-archive-canceled-days").props.value,
+  ).toBe("1");
+  expect(test.store.current.settings.archiveCanceledAfterDays).toBe(null);
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(test.host.archive).not.toHaveBeenCalled();
+  expect(test.store.current.settings.archiveDoneEnabled).toBe(false);
+});
+
+it("leaves both rules off after a real storage failure and retries only the confirmed rule", async () => {
+  vi.useFakeTimers();
+  const test = await archiveSettingsFixture();
+  await test.toggle("auto-archive-canceled", true);
+  vi.spyOn(test.backing, "write").mockRejectedValueOnce(
+    new Error("storage failed"),
+  );
+  await expect(
+    (test.confirmation().props.onConfirm as () => Promise<boolean>)(),
+  ).rejects.toThrow("storage failed");
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(test.store.current.settings).toMatchObject({
+    archiveDoneEnabled: false,
+    archiveCanceledEnabled: false,
+  });
+  expect(test.host.archive).not.toHaveBeenCalled();
+  await (test.confirmation().props.onConfirm as () => Promise<boolean>)();
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(test.host.archive).toHaveBeenCalledExactlyOnceWith("canceled");
+  expect(test.store.current.settings.archiveDoneEnabled).toBe(false);
+});
+
 it.each(["done", "canceled"] as const)(
   "confirms a shorter %s waiting period using its new due count and saves the proposed delay",
   async (kind) => {
@@ -1005,94 +1103,6 @@ it.each(["done", "canceled"] as const)(
   },
 );
 
-it("switching the master off pauses both rules and re-enabling confirms both due candidates", async () => {
-  const test = await archiveSettingsFixture(
-    {
-      autoArchive: true,
-      archiveDoneEnabled: true,
-      archiveCanceledEnabled: true,
-      archiveDoneAfterDays: 7,
-      archiveCanceledAfterDays: 14,
-    },
-    "2026-09-22T00:00:00Z",
-  );
-  const enabledSettings = test.store.current.settings;
-  await test.toggle("auto-archive", false);
-  expect(test.store.current.settings).toEqual({
-    ...enabledSettings,
-    autoArchive: false,
-  });
-  test.host.conversation = agentEvidence("2026-08-01T00:00:00Z");
-  for (const agent of test.inventory.agents) {
-    agent.updatedAt = "2026-08-01T00:00:00Z";
-    agent.lastUserMessageAt = "2026-08-01T00:00:00Z";
-  }
-  await test.board.refresh();
-  test.refreshView();
-  expect(test.host.archive).not.toHaveBeenCalled();
-  test.mutate.mockClear();
-  await test.toggle("auto-archive", true);
-  expect(test.mutate).not.toHaveBeenCalled();
-  expect(test.confirmation().props.description).toBe(
-    t.enableAutoArchiveConfirm
-      .replace("{count}", "2")
-      .replace("{done}", "1")
-      .replace("{canceled}", "1"),
-  );
-  const rows = findByTestId(test.confirmation(), "workboard-archive-candidates")
-    .props.children as ReactElement[];
-  expect(rows).toHaveLength(2);
-  expect(rows.map(elementText)).toEqual([
-    expect.stringContaining(t.stages.done),
-    expect.stringContaining(t.stages.canceled),
-  ]);
-  (test.confirmation().props.onClose as () => void)();
-  expect(test.store.current.settings.autoArchive).toBe(false);
-  expect(test.mutate).not.toHaveBeenCalled();
-  await test.toggle("auto-archive", true);
-  await (test.confirmation().props.onConfirm as () => Promise<boolean>)();
-  await test.board.refresh();
-  expect(test.store.current.settings).toEqual(enabledSettings);
-  expect(test.host.archive).toHaveBeenCalledTimes(2);
-  expect(test.host.archive).toHaveBeenCalledWith("canceled");
-  expect(test.host.archive).toHaveBeenCalledWith("done");
-  expect(test.inventory.workspaces).toEqual([]);
-});
-
-it.each([
-  [true, false],
-  [false, true],
-  [true, true],
-])(
-  "master off collapses both rules and retains Done=%s Canceled=%s",
-  async (done, canceled) => {
-    const test = await archiveSettingsFixture({
-      autoArchive: false,
-      archiveDoneEnabled: done,
-      archiveCanceledEnabled: canceled,
-      archiveDoneAfterDays: 7,
-      archiveCanceledAfterDays: 14,
-    });
-    const before = test.store.current.settings;
-    expect(
-      findByTestId(test.render(), "workboard-auto-archive").props.disabled,
-    ).toBe(false);
-    expect(() =>
-      findByTestId(test.render(), "workboard-auto-archive-rules"),
-    ).toThrow("not found");
-    await test.board.refresh();
-    expect(test.store.current.settings).toEqual(before);
-    expect(test.mutate).not.toHaveBeenCalled();
-    expect(test.host.archive).not.toHaveBeenCalled();
-    await test.toggle("auto-archive", true);
-    expect(() =>
-      findByTestId(test.render(), "workboard-auto-archive-rules"),
-    ).toThrow("not found");
-    (test.confirmation().props.onClose as () => void)();
-    expect(test.store.current.settings).toEqual(before);
-  },
-);
-
 it("saves enabling rules with no overdue tasks without confirmation", async () => {
   const test = await archiveSettingsFixture({}, "2026-09-22T00:00:00Z");
   await test.toggle("auto-archive-done", true);
@@ -1106,7 +1116,7 @@ it("saves enabling rules with no overdue tasks without confirmation", async () =
   expect(test.host.archive).not.toHaveBeenCalled();
 });
 
-it("saves disabling rules and the master without confirmation even when tasks are overdue", async () => {
+it("saves disabling both rules without confirmation even when tasks are overdue", async () => {
   const test = await archiveSettingsFixture();
   test.host.safety = async () => "git-dirty";
   const initial = test.board.snapshot();
@@ -1123,9 +1133,7 @@ it("saves disabling rules and the master without confirmation even when tasks ar
   test.refreshView();
   await test.toggle("auto-archive-done", false);
   await test.toggle("auto-archive-canceled", false);
-  await test.toggle("auto-archive", false);
   expect(test.store.current.settings).toMatchObject({
-    autoArchive: false,
     archiveDoneEnabled: false,
     archiveCanceledEnabled: false,
   });
@@ -1234,7 +1242,7 @@ it("blocks repeated immediate archive saves before a rerender", async () => {
   const toggle = findByTestId(test.render(), "workboard-auto-archive-done")
     .props.onValueChange as (value: boolean) => Promise<void>;
   const pending = toggle(true);
-  for (const control of ["auto-archive", "auto-archive-canceled"]) {
+  for (const control of ["auto-archive-done", "auto-archive-canceled"]) {
     expect(
       findByTestId(test.render(), `workboard-${control}`).props.disabled,
     ).toBe(true);
@@ -1344,11 +1352,10 @@ it("lists only the proposed rule's due workspaces with their state and proposed 
 });
 
 it("lists both states without truncation in a bounded scroll area", async () => {
-  const test = await archiveSettingsFixture({
-    autoArchive: false,
-    archiveDoneEnabled: true,
-    archiveCanceledEnabled: true,
-  });
+  const test = await archiveSettingsFixture();
+  test.host.safety = async () => "git-dirty";
+  await test.toggle("auto-archive-canceled", true);
+  await (test.confirmation().props.onConfirm as () => Promise<boolean>)();
   for (let index = 0; index < 40; index++) {
     const kind = index % 2 ? "done" : "canceled";
     const id = `many-${index}`;
@@ -1366,7 +1373,7 @@ it("lists both states without truncation in a bounded scroll area", async () => 
   }
   await test.board.refresh();
   test.refreshView();
-  await test.toggle("auto-archive", true);
+  await test.toggle("auto-archive-done", true);
   const confirmation = test.confirmation();
   expect(confirmation.props.description).toContain("42");
   expect(confirmation.props.scrollable).toBe(false);
@@ -1447,20 +1454,27 @@ it.each(["zh", "en"] as const)(
 );
 
 it.each(["zh", "en"] as const)(
-  "groups archive settings under a standalone master and two subordinate rules in %s",
+  "groups two independent archive rules without a master or setup step in %s",
   (language) => {
     const localized = strings(language);
     const tree = renderSettings(
-      board(settingsSchema.parse({ autoArchive: true })),
+      board(
+        settingsSchema.parse({
+          archiveDoneEnabled: true,
+          archiveCanceledEnabled: true,
+        }),
+      ),
       vi.fn(),
       localized,
     );
     const section = findByTestId(tree, "workboard-auto-archive-section");
     expect(section.props.title).toBe(localized.autoArchive);
-    const master = findByTestId(section, "workboard-auto-archive-master");
-    expect(findByTestId(master, "workboard-auto-archive").props.label).toBe(
-      localized.autoArchiveMaster,
-    );
+    expect(() =>
+      findByTestId(section, "workboard-auto-archive-master"),
+    ).toThrow("not found");
+    expect(() =>
+      findByTestId(section, "workboard-preview-archive-setup"),
+    ).toThrow("not found");
     const rules = findByTestId(section, "workboard-auto-archive-rules");
     expect(() => findByTestId(rules, "workboard-auto-archive")).toThrow(
       "not found",
@@ -1481,7 +1495,7 @@ it.each(["zh", "en"] as const)(
 );
 
 it.each(["done", "canceled"] as const)(
-  "%s rule collapses its wait controls and retains saved values and unsaved input across both toggles",
+  "%s rule collapses its wait controls and retains saved values and unsaved input across repeated toggles",
   async (kind) => {
     const test = await archiveSettingsFixture(
       {
@@ -1497,15 +1511,6 @@ it.each(["done", "canceled"] as const)(
     expect(input.props.value).toBe(kind === "done" ? "7" : "14");
     (input.props.onChangeText as (text: string) => void)("31");
     await test.toggle(`auto-archive-${kind}`, false);
-    expect(() => findByTestId(test.render(), inputId)).toThrow("not found");
-    await test.toggle("auto-archive", false);
-    expect(() =>
-      findByTestId(test.render(), "workboard-auto-archive-rules"),
-    ).toThrow("not found");
-    await test.toggle("auto-archive", true);
-    expect(
-      findByTestId(test.render(), `workboard-auto-archive-${kind}`).props.value,
-    ).toBe(false);
     expect(() => findByTestId(test.render(), inputId)).toThrow("not found");
     await test.toggle(`auto-archive-${kind}`, true);
     expect(findByTestId(test.render(), inputId).props.value).toBe("31");
@@ -1531,14 +1536,16 @@ it.each(["zh", "en"] as const)(
   (language) => {
     const localized = strings(language);
     const tree = renderSettings(
-      board(settingsSchema.parse({ autoArchive: true })),
+      board(
+        settingsSchema.parse({
+          archiveDoneEnabled: true,
+          archiveCanceledEnabled: true,
+        }),
+      ),
       vi.fn(),
       localized,
     );
     const section = findByTestId(tree, "workboard-auto-archive-section");
-    expect(
-      findByTestId(section, "workboard-auto-archive").props.hint,
-    ).toBeUndefined();
     const rules = findByTestId(section, "workboard-auto-archive-rules");
     expect(rules.props.style).not.toHaveProperty("borderLeftWidth");
     const labels = (node: ReactNode): unknown[] => {
