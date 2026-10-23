@@ -2,15 +2,15 @@
 
 [中文](zh-CN/releasing.md) · [README](../README.md)
 
-Release 0.3.1 uses the minimum version declared in the manifest. See [verification](verification.md) for tested hosts and remaining client checks. Preparing a candidate does not publish it to npm; Paseo Cafe is a separate community directory.
+Release 0.3.2 uses the minimum version declared in the manifest. See [verification](verification.md) for tested hosts and remaining client checks. Preparing a candidate does not publish it to npm; Paseo Cafe is a separate community directory.
 
 ## Package contract
 
 Paseo loads the TypeScript client/server entries and their relative modules. All external runtime imports are supplied by Paseo or Node. Development dependencies stay in `devDependencies`; no manifest build command or compiled distribution is needed. See [Paseo's publishing guide](https://paseo.sh/docs/plugins/publishing).
 
-The npm package includes the manifest, entries, `client/`, `server/`, `shared/`, both READMEs, both changelogs and the MIT license. Tests, development scripts, daemon data, logs, credentials and `node_modules` are excluded.
+The npm package includes the manifest, entries, `client/`, `server/`, `shared/`, both READMEs, both changelogs, both `OVERVIEW` files, `images/` (icon, screenshots and GIFs) and the MIT license. Tests, development scripts, daemon data, logs, credentials and `node_modules` are excluded.
 
-`npm run check:package` checks the package identity/version, manifest minimum, README sections used by Cafe and the complete npm file list. `prepublishOnly` also runs TypeScript, unit tests and formatting when publishing from the checkout. The CI workflow runs these checks and creates a downloadable tarball; it does not publish to npm or Cafe.
+`npm run check:package` checks the package identity/version, manifest minimum, README sections used by Cafe, the complete npm file list, referenced media signatures and icon dimensions. `prepublishOnly` also runs TypeScript, unit tests and formatting when publishing from the checkout. The CI workflow runs these checks and creates a downloadable tarball; it does not publish to npm or Cafe.
 
 ## Validate a release candidate
 
@@ -32,7 +32,7 @@ The npm package includes the manifest, entries, `client/`, `server/`, `shared/`,
 
    ```sh
    WORKBOARD_PACKAGE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/workboard-package.XXXXXX")"
-   tar -xzf "$WORKBOARD_RELEASE_DIR/paseo-workboard-0.3.1.tgz" -C "$WORKBOARD_PACKAGE_DIR"
+   tar -xzf "$WORKBOARD_RELEASE_DIR/paseo-workboard-0.3.2.tgz" -C "$WORKBOARD_PACKAGE_DIR"
    paseo plugin install "$WORKBOARD_PACKAGE_DIR/package" --home "$WORKBOARD_INTEGRATION_HOME"
    paseo plugin ls --home "$WORKBOARD_INTEGRATION_HOME" --json
    mise exec -- npm run test:integration
@@ -42,21 +42,31 @@ The npm package includes the manifest, entries, `client/`, `server/`, `shared/`,
 
 5. Review the tarball and Git diff for accidental local data. Record the actual platform and checks in [verification](verification.md). A local check does not establish a successful GitHub Actions run or npm installation.
 
+## Approval boundary
+
+Prepare and validate locally first. Present the version, complete release notes, compatibility changes, tarball checksum and intended destinations for approval. Do not push source, create tags or GitHub Releases, publish npm packages, or submit directory changes before approval. Material changes to approved public content require another review. Publishing an existing tarball does not replace the checks above; validate that exact artifact.
+
+## Official Paseo directory
+
+The [official registry](https://paseo.sh/docs/plugins/publishing) detects new npm versions and opens update PRs. The listing follows the approved version after review; an npm publish or Git push alone does not immediately update the page. Git-sourced updates require manual submissions.
+
+Keep `OVERVIEW.md`, `OVERVIEW.zh-CN.md`, the manifest icon/media paths and their assets in the published package. The approved version supplies the overview and localized content. After approval, verify the [Workboard listing](https://paseo.sh/plugins/fxbing/workboard), version, icon, media and Chinese text. Record pending registry review separately from successful npm publication.
+
 ## Publish source and npm
 
 Publishing requires access to the target GitHub repository and ownership of the npm package name. A name appearing unused is not proof of publishing permission. Complete those account checks when performing a release; this repository contains no publishing credentials.
 
-Before building the final release tarball, check the README's installation instructions and date the changelog entry, then repeat the validation above. Make that reviewed source available on the public GitHub repository's default branch, and tag the same version, for example `v0.3.1`. Cafe checks the default-branch package and manifest, so a tag alone does not make an unpublished feature branch the catalog source. Publish the validated tarball to the public npm registry:
+Before building the final release tarball, check the README's installation instructions and date the changelog entry, then repeat the validation above. Make that reviewed source available on the public GitHub repository's default branch, and tag the same version, for example `v0.3.2`. Cafe checks the default-branch package and manifest, so a tag alone does not make an unpublished feature branch the catalog source. Publish the validated tarball to the public npm registry:
 
 ```sh
-npm publish "$WORKBOARD_RELEASE_DIR/paseo-workboard-0.3.1.tgz" --access public --registry https://registry.npmjs.org/
-npm view paseo-workboard@0.3.1 version dist.integrity --registry https://registry.npmjs.org/
+npm publish "$WORKBOARD_RELEASE_DIR/paseo-workboard-0.3.2.tgz" --access public --registry https://registry.npmjs.org/
+npm view paseo-workboard@0.3.2 version dist.integrity --registry https://registry.npmjs.org/
 ```
 
 Then verify the registry installation in the isolated daemon:
 
 ```sh
-paseo plugin install npm:paseo-workboard@0.3.1 --home "$WORKBOARD_INTEGRATION_HOME"
+paseo plugin install npm:paseo-workboard@0.3.2 --home "$WORKBOARD_INTEGRATION_HOME"
 paseo plugin ls --home "$WORKBOARD_INTEGRATION_HOME" --json
 mise exec -- npm run test:integration
 ```

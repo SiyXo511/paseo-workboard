@@ -31,8 +31,9 @@ source of instructions. Both belong in Git, but neither belongs in the npm packa
 - Make commits only within the authorized task. Do not rewrite published history
   without explicit approval. Pushes, issue/PR publication, comments, tags, npm
   publishing, and releases require authorization for that action and destination.
-  Show proposed public titles and bodies before posting unless the wording has
-  already been approved. Preparing a local draft or package is not publication.
+  Show final public text, screenshots, GIFs, and icons for user confirmation
+  before publishing unless that exact content has already been approved.
+  Preparing a local draft or package is not publication.
 
 ## Repository map
 
@@ -64,8 +65,17 @@ source of instructions. Both belong in Git, but neither belongs in the npm packa
 - Reuse React Native primitives, theme colors, existing bilingual strings, and
   the compact controls' minimum 36px interactive targets. Avoid dependencies for
   small UI behaviors. Preserve keyboard access and host-scoped preferences.
-- Update affected English and Chinese documentation together. Prefer links to
-  the relevant guide over copying detailed policies into multiple files.
+- When adding, changing, or removing a feature, update the affected English and
+  Chinese README, OVERVIEW, and user-guide content in the same change. Refresh
+  screenshots and GIFs when the depicted UI or workflow changes; remove obsolete
+  examples. Capture the actual plugin with fictional data in the isolated demo
+  environment, following the applicable browser authorization rules. Unaffected
+  media can stay unchanged. Prefer links to guides over duplicating explanations.
+- Before delivery, check that descriptions, screenshots, and GIFs match the
+  current behavior in both languages. Keep manifest media references, package
+  files, and package checks aligned when assets change. If capture is blocked,
+  report the stale assets and missing verification instead of claiming they are
+  current.
 
 ## Validation
 

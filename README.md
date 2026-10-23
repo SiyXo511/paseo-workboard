@@ -12,16 +12,38 @@ Workboard brings active workspaces into one board, with one task per workspace. 
 
 - **Workspaces and drafts together.** Existing workspaces appear automatically. Drafts need only a title, with no workspace, directory, or Agent required.
 - **Board and list views.** Switch layouts while keeping the same tasks, filters, and ordering. Each view remembers its own collapsed groups.
-- **Status linked to workspace labels.** Move a task between groups or change its managed label in Paseo. Both update the same status while preserving unrelated labels.
-- **Activity at a glance.** See Agent activity, conversation dates, and PR/MR, CI, and review information supplied by Paseo. Filter tasks to focus on what needs attention.
+- **Status linked to workspace labels.** Move a task between groups or change its managed label in Paseo. Both update the same status while preserving unrelated labels. Optional exclusive status labels replace a previous managed label when a new one can be identified.
+- **Activity at a glance.** See Agent activity, conversation dates, and PR/MR, CI, and review information supplied by Paseo. Filter by project, activity, PR/MR condition, attention, or last conversation date.
 - **A configurable workflow.** Customize groups and their defaults, reorder tasks and groups by dragging or keyboard controls, and optionally pin in-progress workspaces in the sidebar.
 - **Optional automatic archiving.** Configure Done and Canceled rules independently to archive eligible workspaces after their respective delays from their last verified conversation, with activity and Git safety checks. Disabled by default.
 
 The interface follows Paseo's desktop/Web language and theme, with English and Chinese text and dates.
 
+## See it in action
+
+The same tasks appear in the board and grouped list. Filters are shared; each view remembers its own collapsed groups.
+
+![Grouped list of fictional tasks](images/list-en.png)
+
+The **Filters** panel includes last conversation date. Choose today, the last three calendar days, this week, or this month; tasks without a conversation date do not match a date range.
+
+![Date and activity filters](images/filters-en.png)
+
+![Switching views and filtering fictional tasks](images/views-filter-en.gif)
+
+Move a task to another group to update its managed status label. The recent move can be undone from the toolbar while its brief undo window is open.
+
+![Moving a fictional task and undoing the move](images/move-undo-en.gif)
+
+Group defaults, exclusive status labels, sidebar pinning, and optional automatic archive live in **Settings**.
+
+![Workboard settings](images/settings-en.png)
+
+This 0.3.2 settings screenshot predates the separate Automatic archive section. See the [archive guide](docs/user-guide.md#archive-workspaces) for the current controls and confirmation list.
+
 ## Installation
 
-Use a Paseo version that meets the minimum in [paseo-plugin.json](paseo-plugin.json). See [verification](docs/verification.md) for tested hosts and client coverage. Plugins run as trusted, unsandboxed code in the daemon; review the source before installing.
+Use Paseo 0.11.0 or later, as required by [paseo-plugin.json](paseo-plugin.json). See [verification](docs/verification.md) for tested hosts and client coverage. Plugins run as trusted, unsandboxed code in the daemon; review the source before installing.
 
 Install from GitHub into the selected Paseo daemon:
 

@@ -6,99 +6,83 @@ This document records the current reproducible evidence for Workboard. It is
 not a claim that every Paseo platform, theme, or host integration has been
 tested.
 
-## Collapsible archive controls and inline Save
+## Independent archive rules and confirmation (2026-10-23)
 
-On 2026-10-23, the screenshot-driven refinement passed on macOS arm64 with
-Node **22.22.2** through `mise`:
+The PR #5 follow-up integrates main at `4360016` and passed on macOS arm64
+with Node **22.22.2** through `mise`:
 
 - Focused settings, candidates, client interactions, archive, configuration and
   archive-default safety tests: **222 tests in 6 files**.
 - `npm run check`: TypeScript and **451 unit tests in 28 files**.
 - `npm run format:check`: passed.
-- `npm run check:package`: **37 approved files**, **112,353 bytes**.
+- `npm run check:package`: **52 approved files**, **3,486,880 bytes**.
+- The actual tarball contains those 52 files, each byte-matching the source.
+  SHA-256: `95911f60c6082c8f56d45d1fd667e3fdb168a5a115fd05ed71e4b2854d64dda3`.
 
-The user-provided screenshot was viewed as an attachment, without viewing or
-capturing the live screen. Its repeated waiting-period entries were two UI rows
-with the same label, not duplicate task data. A single settings row now contains
-the input and its adjacent Save action. Bilingual tests verify one label per
-rule, control order and the bounded horizontal layout. Three master-off cases
-and two rule-off cases failed before collapse was implemented; both saved values
-and unsaved input now survive hiding and reopening either level. Earlier
-confirmation, candidate, concurrency and failure regressions remain green.
+Real Workboard and Store fixtures cover both terminal states, full proposed
+settings, confirm and cancel, shorter delays, disabling, master-off, no-overdue
+saves, concurrent settings changes, repeated submissions and failure recovery.
+The candidate tests cover exact count/list agreement, proposed deadlines, all
+42 items in a long list, empty and invalidated lists, and conservative evidence
+wording. Bilingual control tests cover the standalone master, both subordinate
+rules, retained saved values and unsaved input across collapse, and one delay
+label with an adjacent Save button. The original confirmation bypass and new
+collapse cases failed their regressions before implementation.
 
-The isolated preview loaded the revised bundle. HTTP/SDK checks are evidence of
-successful loading, not rendered-layout or keyboard validation. Earlier records
-below describe previous UI checkpoints, including the superseded disabled-only
-controls; current controls collapse when their controlling switch is off.
+The user-provided screenshot was inspected as an attachment. Its repeated delay
+entries were two UI rows with the same label, not duplicated task data. The
+isolated Paseo 0.12.0 preview loaded the accepted UI and passed read-only HTTP/SDK
+checks while preserving synthetic state. The user accepted the local preview.
+No live screen was viewed or captured by the agent; rendered keyboard and
+screen-reader behavior and the full host integration suite were not rechecked.
+The inherited `images/settings-en.png` and `images/settings-zh-CN.png` predate
+this archive layout and remain stale, as noted in both guides. Other inherited
+media is unchanged. The historical records below describe different revisions;
+their host and visual results do not establish those results for this follow-up.
 
-## Automatic archive master and subordinate controls
+## 0.3.2 release candidate (2026-10-23, unpublished)
 
-On 2026-10-23, the separate Automatic archive section passed on macOS arm64
-with Node **22.22.2** through `mise`:
+On macOS arm64 with Node 22.22.2, `check` passed 414 tests in 28 files;
+`format:check` and `check:package` passed. The actual tarball has 52 approved
+files (3,483,258 bytes), each byte-matching the reviewed source. Its SHA-256 is
+`6bd1a8cc49d3815fb03e037e246104d1f58eacd3b18be1d0a82fe6409336edbc`.
 
-- Focused settings, candidates, client interactions, archive, configuration and
-  archive-default safety tests: **218 tests in 6 files**.
-- `npm run check`: TypeScript and **447 unit tests in 28 files**.
-- `npm run format:check`: passed.
-- `npm run check:package`: **37 approved files**, **112,130 bytes**.
+The unpacked package, without development dependencies, installed as `running`
+and passed all 13 isolated tests on Paseo 0.12.0-beta.3 in 81.60s. The marked
+loopback-only daemon was stopped afterward. This metadata-only preparation did
+not repeat the visual checks below. The exact minimum host 0.11.0 is unavailable
+locally and remains untested. CI, npm installation and registry rendering are
+not verified by these local checks. Publication is pending user approval.
 
-Three master-off preference combinations verify that both rules and all delay
-controls are disabled without changing saved choices or archiving either state.
-A real-board round trip turns the master off, makes both tasks overdue, verifies
-neither archives, then previews both candidates together on re-enable, cancels,
-and finally confirms both. Bilingual section tests cover the standalone master
-and subordinate rule cards. The five new cases failed before their fixes.
-The existing server gate already controlled both states; no server change was
-needed. An isolated preview loaded the new bundle and passed HTTP/SDK checks.
-Rendered layout and keyboard behavior remain for user acceptance.
+## Listing and media update (2026-10-23, unpublished)
 
-The records below describe earlier checkpoints. In particular, editing rules
-while the master is off was supported then and is intentionally disabled now.
+The local listing update passed `check` (414 tests in 28 files),
+`format:check`, and `check:package` on macOS arm64 with Node 22.22.2.
+The source installation passed all 13 isolated integration tests in 77.13s
+on Paseo 0.12.0-beta.3. This is separate from the earlier release candidate.
 
-## Archive confirmation candidate list
+Chrome exercised the English and Chinese board, list, date filter, and
+drag-and-undo flow in a marked, loopback-only disposable home. Fictional
+workspaces and a deterministic fixture provider supplied the demonstration
+data; no model requests or personal task data were used. Today selected four
+dated tasks out of seven, excluding the three unbound drafts; clearing the
+filter restored all seven. Moving a task to Review and undoing returned it to
+In progress. Settings screenshots show the exclusive-label and archive switches
+off; these switches were not visually toggled in this pass.
 
-On 2026-10-23, the candidate-list refinement passed on macOS arm64 with Node
-**22.22.2** through `mise`:
+The PNGs are captured UI views. The GIFs sequence actual captured states with
+reading pauses (about 12s for filtering and 9s for moving), rather than continuous
+screen recordings. All four are below 0.4 MB. The 512px PNG icon was also
+inspected at 24, 32, and 64px on light and dark backgrounds.
 
-- Focused settings, candidate calculation, and client interaction tests:
-  **153 tests in 3 files**.
-- `npm run check`: TypeScript and **443 unit tests in 28 files**.
-- `npm run format:check`: passed.
-- `npm run check:package`: **37 approved files**, **111,766 bytes**.
-
-The new regressions cover exact candidate/count agreement, proposed deadlines,
-both terminal states, all 42 items in a long list, empty lists after evidence
-changes, stale-list invalidation, bilingual conservative evidence wording, and
-the SDK's bounded-scroll contract. Five new cases failed before implementation;
-the bounded-scroll assertion also failed before its fix. Earlier settings safety
-regressions remain in the full suite.
-
-A disposable Paseo 0.12.0 preview loaded the revised plugin; read-only SDK and
-HTTP checks verified its bundle and successful page/assets responses. Existing
-synthetic fixture state was retained. No live screen was viewed or captured.
-Actual rendered layout, keyboard scrolling, and screen-reader behavior remain
-for user acceptance; primitive-boundary tests do not establish those results.
-
-## Independent archive settings follow-up
-
-On 2026-10-23, the local PR #5 follow-up combined its independent archive rules
-with main at `141a38f` and passed the following on macOS arm64 with Node
-**22.22.2** through `mise`:
-
-- Focused settings, client interaction, configuration, archive, and archive-default
-  safety tests: **192 tests in 5 files**.
-- `npm run check`: TypeScript and **435 unit tests in 28 files**.
-- `npm run format:check`: passed.
-- `npm run check:package`: **37 approved files**, **110,927 bytes**.
-
-The settings regressions use the real Workboard and Store with fictional host
-fixtures. They cover proposed Done/Canceled previews, confirmation and cancel,
-shorter delays, master-off and no-overdue saves, disabling rules, concurrent
-settings changes, repeated submissions, failure recovery, and clearing confirmed
-delay drafts. The original bypass failed the new regressions before the fix.
-The client tests use hook and primitive boundaries; no rendered client, live
-user screen, or daemon integration was exercised in this follow-up. These are
-local source checks, not CI, publication, or deployment results.
+The local tarball contains 52 approved files, including both overviews and all
+listing assets; every packed file matched its source bytes. Installing the
+unpacked tarball without development dependencies in the disposable daemon
+reported `running`. The icon/media
+metadata raises the declared minimum to 0.11.0, but that exact host version was
+not available locally and was not tested. This pass does not establish native
+mobile, Electron, registry rendering, publication, or compatibility with every
+host above the minimum. Version 0.3.1 remains unchanged pending release review.
 
 ## 0.3.1 release candidate
 
