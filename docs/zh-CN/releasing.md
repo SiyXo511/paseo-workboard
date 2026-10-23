@@ -2,7 +2,7 @@
 
 [English](../releasing.md) · [README](../../README.zh-CN.md)
 
-0.3.0 使用 manifest 声明的最低版本；已验证宿主和客户端检查边界见[验证说明](verification.md)。准备候选包不等于发布到 npm；Paseo Cafe 是独立的社区目录。
+0.3.1 使用 manifest 声明的最低版本；已验证宿主和客户端检查边界见[验证说明](verification.md)。准备候选包不等于发布到 npm；Paseo Cafe 是独立的社区目录。
 
 ## 发布包约定
 
@@ -32,7 +32,7 @@ npm 包包含 manifest、入口、`client/`、`server/`、`shared/`、中英文 
 
    ```sh
    WORKBOARD_PACKAGE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/workboard-package.XXXXXX")"
-   tar -xzf "$WORKBOARD_RELEASE_DIR/paseo-workboard-0.3.0.tgz" -C "$WORKBOARD_PACKAGE_DIR"
+   tar -xzf "$WORKBOARD_RELEASE_DIR/paseo-workboard-0.3.1.tgz" -C "$WORKBOARD_PACKAGE_DIR"
    paseo plugin install "$WORKBOARD_PACKAGE_DIR/package" --home "$WORKBOARD_INTEGRATION_HOME"
    paseo plugin ls --home "$WORKBOARD_INTEGRATION_HOME" --json
    mise exec -- npm run test:integration
@@ -46,17 +46,17 @@ npm 包包含 manifest、入口、`client/`、`server/`、`shared/`、中英文 
 
 发布需要目标 GitHub 仓库权限和 npm 包名发布权限。查到名称尚未使用不代表当前账号具备权限；真正发布时完成账号检查，仓库不保存发布凭证。
 
-生成最终发布包前，核对 README 安装说明并为更新日志填写发布日期，再重复上述验证。将该源码放到公开 GitHub 仓库默认分支，并为同一版本创建 tag，例如 `v0.3.0`。Cafe 检查默认分支的包与 manifest，只有 tag 不能让未发布的功能分支成为目录来源。将已经验证的 tarball 发布到公开 npm registry：
+生成最终发布包前，核对 README 安装说明并为更新日志填写发布日期，再重复上述验证。将该源码放到公开 GitHub 仓库默认分支，并为同一版本创建 tag，例如 `v0.3.1`。Cafe 检查默认分支的包与 manifest，只有 tag 不能让未发布的功能分支成为目录来源。将已经验证的 tarball 发布到公开 npm registry：
 
 ```sh
-npm publish "$WORKBOARD_RELEASE_DIR/paseo-workboard-0.3.0.tgz" --access public --registry https://registry.npmjs.org/
-npm view paseo-workboard@0.3.0 version dist.integrity --registry https://registry.npmjs.org/
+npm publish "$WORKBOARD_RELEASE_DIR/paseo-workboard-0.3.1.tgz" --access public --registry https://registry.npmjs.org/
+npm view paseo-workboard@0.3.1 version dist.integrity --registry https://registry.npmjs.org/
 ```
 
 随后在隔离 daemon 验证 registry 安装：
 
 ```sh
-paseo plugin install npm:paseo-workboard@0.3.0 --home "$WORKBOARD_INTEGRATION_HOME"
+paseo plugin install npm:paseo-workboard@0.3.1 --home "$WORKBOARD_INTEGRATION_HOME"
 paseo plugin ls --home "$WORKBOARD_INTEGRATION_HOME" --json
 mise exec -- npm run test:integration
 ```

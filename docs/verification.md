@@ -6,6 +6,21 @@ This document records the current reproducible evidence for Workboard. It is
 not a claim that every Paseo platform, theme, or host integration has been
 tested.
 
+## 0.3.1 release candidate
+
+On 2026-10-23, the **0.3.1** candidate passed `check`, `format:check` and
+`check:package` on macOS arm64 with Node **22.22.2**: **414 unit tests in 28
+files**, including label exclusivity and date-range filtering. The actual tarball
+contains **37 approved files**, **109,018 bytes**, all matching the reviewed
+source byte for byte. Its SHA-256 is
+`8f0ba7d44b133414dd280e990d493c4e047b36437721265b33f34f40528e8486`.
+
+The unpacked tarball, without development dependencies, passed **13/13 isolated
+integration tests in 64.87s** on Paseo **0.12.0-beta.3** in a fresh marked home.
+These are candidate-package checks; npm publication and registry installation
+require separate verification. The new settings switch and date filter have not
+been exercised in a rendered client during this release check.
+
 ## Verified baseline
 
 On 2026-10-13, the dual-view source (still schema v8) was checked on macOS arm64 with

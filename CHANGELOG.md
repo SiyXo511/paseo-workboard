@@ -4,6 +4,12 @@
 
 All notable changes are documented here.
 
+## 0.3.1 — 2026-10-23
+
+- Add optional exclusive status labels: a new status label added outside Workboard replaces the previous one, preserving unrelated labels and leaving ambiguous conflicts for manual resolution. Disabled by default.
+- Filter tasks by their last conversation date: today, the last three calendar days, the current week, or the current month. Remember the selection per host.
+- Reorganize the READMEs and clarify the issue-first contribution workflow and shared AI instructions.
+
 ## 0.3.0 — 2026-10-13
 
 - Add a grouped List view alongside Board, sharing task data, filters and saved order while remembering the selected view and separate collapse preferences per host.
