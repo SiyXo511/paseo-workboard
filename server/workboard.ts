@@ -15,6 +15,7 @@ import {
   isTerminalGroup,
   labelKey,
   newTask,
+  newestConflictStage,
   orderedGroups,
   resolveStage,
   settingsSchema,
@@ -365,9 +366,16 @@ export class Workboard {
     }
     if (this.stopped) throw new Error("Workboard stopped");
     this.inventory = inventory;
+    const resolutions: Array<{
+      taskId: string;
+      workspaceId: string;
+      stage: Stage;
+      labels: string[];
+    }> = [];
     await this.store.update((data) => {
       for (const workspace of inventory.workspaces) {
         let task = data.tasks.find((t) => t.workspaceId === workspace.id);
+        const imported = !task;
         if (!task) {
           task = {
             ...newTask(
@@ -387,11 +395,43 @@ export class Workboard {
         task.title = workspace.name;
         task.projectId = workspace.projectId;
         task.projectName = workspace.projectDisplayName;
-        task.lastStage = resolveStage(
+        const priorStage = imported ? null : task.lastStage;
+        const stage = resolveStage(
           workspace.labels,
           data.settings.groups,
           data.settings.defaultStartGroup,
         );
+        task.lastStage = stage;
+        // A clean observation refreshes the newest-wins attribution baseline; a conflict
+        // must not, or one failed sync would make every later conflict unattributable.
+        if (stage !== "conflict") task.resolvedStage = stage;
+        // Newest-wins exclusivity: an external edit that added one status label on top of
+        // the baseline stage's label is resolvable; any other conflict shape stays manual.
+        const baseline =
+          task.resolvedStage ??
+          (priorStage !== null && priorStage !== "conflict"
+            ? priorStage
+            : null);
+        if (
+          stage === "conflict" &&
+          baseline !== null &&
+          data.settings.exclusiveStatusLabels &&
+          task.workspaceId &&
+          !task.binding
+        ) {
+          const newcomer = newestConflictStage(
+            baseline,
+            workspace.labels,
+            data.settings.groups,
+          );
+          if (newcomer)
+            resolutions.push({
+              taskId: task.id,
+              workspaceId: task.workspaceId,
+              stage: newcomer,
+              labels: statusLabels(workspace.labels, data.settings.groups),
+            });
+        }
         const observation = observations.get(workspace.id);
         if (observation) {
           task.lastConversationAt = observation.displayAt;
@@ -446,6 +486,44 @@ export class Workboard {
     this.connected = true;
     this.error = null;
     this.refreshedAt = this.stamp();
+    if (resolutions.length) await this.resolveExclusivityConflicts(resolutions);
+  }
+  /**
+   * Newest-wins resolution of an exclusively conflicting status label: re-run the same
+   * verified label sync a stage change uses, then record the fixed stage. A stale or
+   * failing sync keeps the conflict issue for manual resolution.
+   */
+  private async resolveExclusivityConflicts(
+    resolutions: ReadonlyArray<{
+      taskId: string;
+      workspaceId: string;
+      stage: Stage;
+      labels: string[];
+    }>,
+  ): Promise<void> {
+    for (const resolution of resolutions) {
+      if (this.stopped) return;
+      try {
+        const workspace = await this.transition(
+          resolution.workspaceId,
+          resolution.stage,
+          resolution.labels,
+        );
+        this.inventory.workspaces = this.inventory.workspaces.map((w) =>
+          w.id === workspace.id ? workspace : w,
+        );
+        await this.store.update((data) => {
+          const task = data.tasks.find((t) => t.id === resolution.taskId);
+          if (!task) return;
+          task.lastStage = resolution.stage;
+          task.resolvedStage = resolution.stage;
+          if (task.issue === "labels-conflict") task.issue = null;
+        });
+        this.changed(resolution.workspaceId);
+      } catch {
+        // The conflict banner stays until the labels are fixed by hand.
+      }
+    }
   }
   /**
    * Combine every agent's evidence into one display time and one archive gate. Only a full
@@ -680,11 +758,16 @@ export class Workboard {
         if (!active.has(id)) delete data.autoPins[id];
     });
   }
+  /**
+   * Persists settings and reports whether groups changed. Group edits re-derive every task's
+   * stage and label mapping, so the caller must reconcile; a preference-only save (a toggle)
+   * is fully reflected by the response board and the debounced refresh that follows.
+   */
   private async saveSettings(
     settings: Settings,
     revision: number,
     expectedSettings?: Settings,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const previous = this.store.current;
     const unchanged = (data: typeof previous) =>
       expectedSettings
@@ -802,6 +885,7 @@ export class Workboard {
       for (const group of removed) delete data.cardOrderByStage[group.id];
       data.settings = next;
     });
+    return !isDeepStrictEqual(next.groups, previous.settings.groups);
   }
   private checkCardOrder(
     data: Data,
@@ -904,12 +988,13 @@ export class Workboard {
             data.tasks.push(task);
           });
         } else if (input.action === "settings") {
-          await this.saveSettings(
+          const groupsChanged = await this.saveSettings(
             input.settings,
             input.revision,
             input.expectedSettings,
           );
-          await this.reconcile();
+          // A full reconcile re-reads every conversation; only group edits need one now.
+          if (groupsChanged) await this.reconcile();
           this.changed();
         } else if (
           input.action === "reorder-cards" ||
@@ -1037,6 +1122,11 @@ export class Workboard {
                 const current = data.tasks.find((t) => t.id === task.id)!;
                 this.checkStageExpected(data, input);
                 current.lastStage = input.stage;
+                // The verified sync made this a clean observation: move the
+                // newest-wins baseline with it, or an external label change
+                // arriving before the next refresh would be attributed
+                // against the stale stage and could delete the newer label.
+                current.resolvedStage = input.stage;
                 current.updatedAt = this.stamp(current.updatedAt);
                 if (current.issue === "labels-conflict") current.issue = null;
               });
@@ -1051,6 +1141,7 @@ export class Workboard {
                 this.checkStageExpected(data, input);
                 current.draftStage = input.stage;
                 current.lastStage = input.stage;
+                current.resolvedStage = input.stage;
                 current.updatedAt = this.stamp(current.updatedAt);
               });
             }
@@ -1167,6 +1258,9 @@ export class Workboard {
                 if (archive.kind === "draft")
                   current.draftStage = archive.stage;
                 current.lastStage = archive.stage;
+                // Restoring establishes the stage, so the attribution
+                // baseline moves with it.
+                current.resolvedStage = archive.stage;
                 // Keep the manual restore until reconciliation confirms native membership.
                 current.issue = current.workspaceId
                   ? "archive-restored-workspace-unavailable"
@@ -1255,6 +1349,12 @@ export class Workboard {
         await this.store.update((data) => {
           const task = data.tasks.find((t) => t.id === survivorId)!;
           task.binding = null;
+          // The verified sync made binding.stage a clean observation: move
+          // both stage fields with it, or an external label change arriving
+          // before the next reconciliation would be attributed against the
+          // survivor's stale stage and could delete the newer label.
+          task.lastStage = binding.stage;
+          task.resolvedStage = binding.stage;
           task.issue = null;
         });
       } catch (error) {

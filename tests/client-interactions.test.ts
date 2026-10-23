@@ -147,6 +147,7 @@ import { ListView } from "../client/ListView";
 import { QuickCreate } from "../client/QuickCreate";
 import { useDragHandle } from "../client/drag-handle";
 import { ConfirmationModal } from "../client/ConfirmationModal";
+import { Modal } from "@getpaseo/plugin/client/react-native";
 import { Text } from "react-native";
 import { HintProvider, HintButton } from "../client/Hint";
 
@@ -2849,4 +2850,38 @@ it("L14 feedback expires from the newest move's own eight-second window without 
   );
   vi.advanceTimersByTime(1);
   expect(() => byID(screen.render(), "workboard-move-feedback")).toThrow();
+});
+
+it("renders confirmation details between its summary and actions without changing cancellation", () => {
+  const close = vi.fn();
+  const confirm = vi.fn();
+  const modal = mount(ConfirmationModal, {
+    title: "Archive settings",
+    description: "2 tasks due",
+    children: "Candidate workspace details",
+    scrollable: false,
+    confirmLabel: "Save",
+    disabled: false,
+    t,
+    theme,
+    onClose: close,
+    onConfirm: confirm,
+  });
+  const content = text(modal.render());
+  expect(
+    find(modal.render(), (element) => element.type === Modal.Content).props
+      .scrollable,
+  ).toBe(false);
+  expect(content.indexOf("Candidate workspace details")).toBeGreaterThan(
+    content.indexOf("2 tasks due"),
+  );
+  expect(content.indexOf("Candidate workspace details")).toBeLessThan(
+    content.indexOf(t.cancel),
+  );
+  find(
+    modal.render(),
+    (element) => element.props.onPress && text(element) === t.cancel,
+  ).props.onPress();
+  expect(close).toHaveBeenCalledOnce();
+  expect(confirm).not.toHaveBeenCalled();
 });

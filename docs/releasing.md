@@ -2,7 +2,7 @@
 
 [中文](zh-CN/releasing.md) · [README](../README.md)
 
-Release 0.3.0 uses the minimum version declared in the manifest. See [verification](verification.md) for tested hosts and remaining client checks. Preparing a candidate does not publish it to npm; Paseo Cafe is a separate community directory.
+Release 0.3.1 uses the minimum version declared in the manifest. See [verification](verification.md) for tested hosts and remaining client checks. Preparing a candidate does not publish it to npm; Paseo Cafe is a separate community directory.
 
 ## Package contract
 
@@ -32,7 +32,7 @@ The npm package includes the manifest, entries, `client/`, `server/`, `shared/`,
 
    ```sh
    WORKBOARD_PACKAGE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/workboard-package.XXXXXX")"
-   tar -xzf "$WORKBOARD_RELEASE_DIR/paseo-workboard-0.3.0.tgz" -C "$WORKBOARD_PACKAGE_DIR"
+   tar -xzf "$WORKBOARD_RELEASE_DIR/paseo-workboard-0.3.1.tgz" -C "$WORKBOARD_PACKAGE_DIR"
    paseo plugin install "$WORKBOARD_PACKAGE_DIR/package" --home "$WORKBOARD_INTEGRATION_HOME"
    paseo plugin ls --home "$WORKBOARD_INTEGRATION_HOME" --json
    mise exec -- npm run test:integration
@@ -46,17 +46,17 @@ The npm package includes the manifest, entries, `client/`, `server/`, `shared/`,
 
 Publishing requires access to the target GitHub repository and ownership of the npm package name. A name appearing unused is not proof of publishing permission. Complete those account checks when performing a release; this repository contains no publishing credentials.
 
-Before building the final release tarball, check the README's installation instructions and date the changelog entry, then repeat the validation above. Make that reviewed source available on the public GitHub repository's default branch, and tag the same version, for example `v0.3.0`. Cafe checks the default-branch package and manifest, so a tag alone does not make an unpublished feature branch the catalog source. Publish the validated tarball to the public npm registry:
+Before building the final release tarball, check the README's installation instructions and date the changelog entry, then repeat the validation above. Make that reviewed source available on the public GitHub repository's default branch, and tag the same version, for example `v0.3.1`. Cafe checks the default-branch package and manifest, so a tag alone does not make an unpublished feature branch the catalog source. Publish the validated tarball to the public npm registry:
 
 ```sh
-npm publish "$WORKBOARD_RELEASE_DIR/paseo-workboard-0.3.0.tgz" --access public --registry https://registry.npmjs.org/
-npm view paseo-workboard@0.3.0 version dist.integrity --registry https://registry.npmjs.org/
+npm publish "$WORKBOARD_RELEASE_DIR/paseo-workboard-0.3.1.tgz" --access public --registry https://registry.npmjs.org/
+npm view paseo-workboard@0.3.1 version dist.integrity --registry https://registry.npmjs.org/
 ```
 
 Then verify the registry installation in the isolated daemon:
 
 ```sh
-paseo plugin install npm:paseo-workboard@0.3.0 --home "$WORKBOARD_INTEGRATION_HOME"
+paseo plugin install npm:paseo-workboard@0.3.1 --home "$WORKBOARD_INTEGRATION_HOME"
 paseo plugin ls --home "$WORKBOARD_INTEGRATION_HOME" --json
 mise exec -- npm run test:integration
 ```

@@ -6,6 +6,115 @@ This document records the current reproducible evidence for Workboard. It is
 not a claim that every Paseo platform, theme, or host integration has been
 tested.
 
+## Collapsible archive controls and inline Save
+
+On 2026-10-23, the screenshot-driven refinement passed on macOS arm64 with
+Node **22.22.2** through `mise`:
+
+- Focused settings, candidates, client interactions, archive, configuration and
+  archive-default safety tests: **222 tests in 6 files**.
+- `npm run check`: TypeScript and **451 unit tests in 28 files**.
+- `npm run format:check`: passed.
+- `npm run check:package`: **37 approved files**, **112,353 bytes**.
+
+The user-provided screenshot was viewed as an attachment, without viewing or
+capturing the live screen. Its repeated waiting-period entries were two UI rows
+with the same label, not duplicate task data. A single settings row now contains
+the input and its adjacent Save action. Bilingual tests verify one label per
+rule, control order and the bounded horizontal layout. Three master-off cases
+and two rule-off cases failed before collapse was implemented; both saved values
+and unsaved input now survive hiding and reopening either level. Earlier
+confirmation, candidate, concurrency and failure regressions remain green.
+
+The isolated preview loaded the revised bundle. HTTP/SDK checks are evidence of
+successful loading, not rendered-layout or keyboard validation. Earlier records
+below describe previous UI checkpoints, including the superseded disabled-only
+controls; current controls collapse when their controlling switch is off.
+
+## Automatic archive master and subordinate controls
+
+On 2026-10-23, the separate Automatic archive section passed on macOS arm64
+with Node **22.22.2** through `mise`:
+
+- Focused settings, candidates, client interactions, archive, configuration and
+  archive-default safety tests: **218 tests in 6 files**.
+- `npm run check`: TypeScript and **447 unit tests in 28 files**.
+- `npm run format:check`: passed.
+- `npm run check:package`: **37 approved files**, **112,130 bytes**.
+
+Three master-off preference combinations verify that both rules and all delay
+controls are disabled without changing saved choices or archiving either state.
+A real-board round trip turns the master off, makes both tasks overdue, verifies
+neither archives, then previews both candidates together on re-enable, cancels,
+and finally confirms both. Bilingual section tests cover the standalone master
+and subordinate rule cards. The five new cases failed before their fixes.
+The existing server gate already controlled both states; no server change was
+needed. An isolated preview loaded the new bundle and passed HTTP/SDK checks.
+Rendered layout and keyboard behavior remain for user acceptance.
+
+The records below describe earlier checkpoints. In particular, editing rules
+while the master is off was supported then and is intentionally disabled now.
+
+## Archive confirmation candidate list
+
+On 2026-10-23, the candidate-list refinement passed on macOS arm64 with Node
+**22.22.2** through `mise`:
+
+- Focused settings, candidate calculation, and client interaction tests:
+  **153 tests in 3 files**.
+- `npm run check`: TypeScript and **443 unit tests in 28 files**.
+- `npm run format:check`: passed.
+- `npm run check:package`: **37 approved files**, **111,766 bytes**.
+
+The new regressions cover exact candidate/count agreement, proposed deadlines,
+both terminal states, all 42 items in a long list, empty lists after evidence
+changes, stale-list invalidation, bilingual conservative evidence wording, and
+the SDK's bounded-scroll contract. Five new cases failed before implementation;
+the bounded-scroll assertion also failed before its fix. Earlier settings safety
+regressions remain in the full suite.
+
+A disposable Paseo 0.12.0 preview loaded the revised plugin; read-only SDK and
+HTTP checks verified its bundle and successful page/assets responses. Existing
+synthetic fixture state was retained. No live screen was viewed or captured.
+Actual rendered layout, keyboard scrolling, and screen-reader behavior remain
+for user acceptance; primitive-boundary tests do not establish those results.
+
+## Independent archive settings follow-up
+
+On 2026-10-23, the local PR #5 follow-up combined its independent archive rules
+with main at `141a38f` and passed the following on macOS arm64 with Node
+**22.22.2** through `mise`:
+
+- Focused settings, client interaction, configuration, archive, and archive-default
+  safety tests: **192 tests in 5 files**.
+- `npm run check`: TypeScript and **435 unit tests in 28 files**.
+- `npm run format:check`: passed.
+- `npm run check:package`: **37 approved files**, **110,927 bytes**.
+
+The settings regressions use the real Workboard and Store with fictional host
+fixtures. They cover proposed Done/Canceled previews, confirmation and cancel,
+shorter delays, master-off and no-overdue saves, disabling rules, concurrent
+settings changes, repeated submissions, failure recovery, and clearing confirmed
+delay drafts. The original bypass failed the new regressions before the fix.
+The client tests use hook and primitive boundaries; no rendered client, live
+user screen, or daemon integration was exercised in this follow-up. These are
+local source checks, not CI, publication, or deployment results.
+
+## 0.3.1 release candidate
+
+On 2026-10-23, the **0.3.1** candidate passed `check`, `format:check` and
+`check:package` on macOS arm64 with Node **22.22.2**: **414 unit tests in 28
+files**, including label exclusivity and date-range filtering. The actual tarball
+contains **37 approved files**, **109,018 bytes**, all matching the reviewed
+source byte for byte. Its SHA-256 is
+`8f0ba7d44b133414dd280e990d493c4e047b36437721265b33f34f40528e8486`.
+
+The unpacked tarball, without development dependencies, passed **13/13 isolated
+integration tests in 64.87s** on Paseo **0.12.0-beta.3** in a fresh marked home.
+These are candidate-package checks; npm publication and registry installation
+require separate verification. The new settings switch and date filter have not
+been exercised in a rendered client during this release check.
+
 ## Verified baseline
 
 On 2026-10-13, the dual-view source (still schema v8) was checked on macOS arm64 with

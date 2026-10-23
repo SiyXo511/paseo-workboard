@@ -169,6 +169,7 @@ const zh = {
   archiveDraftConfirm:
     "归档草稿“{name}”？归档后将移出看板，可在归档页放回原分组。",
   autoArchive: "自动归档",
+  autoArchiveMaster: "启用自动归档",
   autoArchiveMigrationPaused:
     "升级时补建了已废弃分组，其标签可能匹配已有 workspace。自动归档已关闭，请核对到期任务后重新开启；存在到期任务时会先要求确认。",
   archiveCanceled: "自动归档已废弃任务",
@@ -184,16 +185,31 @@ const zh = {
   detachDraft: "还原合并草稿",
   detachDraftConfirm:
     "将“{name}”还原为独立草稿，并从此任务备注中移除合并时追加的内容？",
-  autoArchiveHint: "只归档已启用且达到各自等待期限的终态规则。",
   archiveRuleHint: "最后对话超过 {days} 天且安全检查通过后归档。",
-  archiveRuleInactive: "总开关开启后才会执行；可预先配置。",
-  enableAutoArchive: "开启自动归档",
+  archiveCandidates: "待归档任务",
+  archiveCandidatesEmpty: "按新设置，目前没有到期任务。",
+  archiveCandidateDue: "等待 {days} 天 · 到期时间：{date}",
+  archiveCandidateExact: "最后一次已验证对话：{date}",
+  archiveCandidateUpperBound:
+    "最后对话不晚于：{date}（以已记录活动时间保守计算）",
+  enableAutoArchive: "保存自动归档设置",
   enableAutoArchiveConfirm:
-    "当前有 {count} 个任务已到期（已废弃 {canceled} 个，已完成 {done} 个）。开启后会在安全检查通过时自动归档对应 workspace，可能停止 Agent 和 terminal，并移除托管 worktree。",
+    "按新设置有 {count} 个任务已到期（已废弃 {canceled} 个，已完成 {done} 个）。保存后会在安全检查通过时自动归档对应 workspace，可能停止 Agent 和 terminal，并移除托管 worktree。",
   enable: "开启",
   pinInProgressWorkspaces: "进行中任务在 Paseo 侧边栏自动置顶",
   pinInProgressHint:
     "按“进行中”分组判断；离开该分组时仅取消插件添加的置顶，保留你手动置顶的 workspace。",
+  exclusiveStatusLabels: "状态标签互斥（新标签替换旧标签）",
+  exclusiveStatusHint:
+    "任务在外部获得新的状态标签时，自动移除上一次的状态标签，只保留最新选择的分组；仅作用于下方分组配置的标签，其他标签不受影响。无法判断哪个标签更新时，仍会显示标签冲突提示。",
+  dateFilter: "日期",
+  dateRanges: {
+    any: "不限制",
+    today: "今天",
+    "3days": "3 天内",
+    week: "本周",
+    month: "当月",
+  },
   settingsTitle: "设置",
   generalSettings: "通用",
   groups: "分组",
@@ -590,6 +606,7 @@ const en: typeof zh = {
   archiveDraftConfirm:
     "Archive draft “{name}”? It will leave the board. You can restore it to its original group from Archive.",
   autoArchive: "Automatic archive",
+  autoArchiveMaster: "Enable automatic archive (master switch)",
   autoArchiveMigrationPaused:
     "An upgrade added a Canceled group whose label may match existing workspaces. Automatic archive was turned off. Review due tasks before re-enabling it; due tasks require confirmation first.",
   archiveCanceled: "Automatically archive Canceled tasks",
@@ -605,18 +622,32 @@ const en: typeof zh = {
   detachDraft: "Restore merged draft",
   detachDraftConfirm:
     "Restore “{name}” as an independent draft and remove its originally appended text from this task's notes?",
-  autoArchiveHint: "Archive only the terminal rules that are enabled and due.",
   archiveRuleHint:
     "Archive after {days} days since the last verified conversation when safety checks pass.",
-  archiveRuleInactive:
-    "Only runs while Automatic archive is on; you can configure it now.",
-  enableAutoArchive: "Enable automatic archive",
+  archiveCandidates: "Tasks due for archive",
+  archiveCandidatesEmpty: "No tasks are currently due under the new settings.",
+  archiveCandidateDue: "{days}-day delay · Due: {date}",
+  archiveCandidateExact: "Last verified conversation: {date}",
+  archiveCandidateUpperBound:
+    "Last conversation no later than: {date} (conservative recorded-activity bound)",
+  enableAutoArchive: "Save automatic archive settings",
   enableAutoArchiveConfirm:
-    "{count} task(s) are currently due ({canceled} Canceled, {done} Done). Enabling this will archive their workspaces after safety checks, which may stop agents and terminals and remove managed worktrees.",
+    "{count} task(s) are due under the new settings ({canceled} Canceled, {done} Done). Saving will archive their workspaces after safety checks, which may stop agents and terminals and remove managed worktrees.",
   enable: "Enable",
   pinInProgressWorkspaces: "Pin in-progress tasks in the Paseo sidebar",
   pinInProgressHint:
     "Use the In progress group. Leaving it removes only the pin added by this plugin; manually pinned workspaces stay pinned.",
+  exclusiveStatusLabels: "Exclusive status labels (newest replaces old)",
+  exclusiveStatusHint:
+    "When a task gains a new status label outside Workboard, remove the previous status label and keep only the latest group. Only labels configured as groups below are affected; ordinary labels are untouched. Conflicts whose newest label cannot be determined still raise the banner.",
+  dateFilter: "Date",
+  dateRanges: {
+    any: "Any time",
+    today: "Today",
+    "3days": "Last 3 days",
+    week: "This week",
+    month: "This month",
+  },
   settingsTitle: "Settings",
   generalSettings: "General",
   groups: "Groups",

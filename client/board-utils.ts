@@ -1,5 +1,6 @@
 import {
   archiveDelayFor,
+  archiveDueAt,
   archiveGate,
   isArchiveDue,
   defaultGroup,
@@ -13,7 +14,12 @@ import {
   type Settings,
   type Stage,
 } from "../shared/model";
-import { DEFAULT_FILTERS, matchesRequest, type BoardFilters } from "./filters";
+import {
+  DEFAULT_FILTERS,
+  matchesDateRange,
+  matchesRequest,
+  type BoardFilters,
+} from "./filters";
 
 const attentionIssues = new Set([
   "labels-conflict",
@@ -58,7 +64,11 @@ export function visibleCards(
   projectId: string,
   search: string,
   attentionOnly: boolean,
-  filters: Pick<BoardFilters, "activity" | "changeRequest"> = DEFAULT_FILTERS,
+  filters: Pick<
+    BoardFilters,
+    "activity" | "changeRequest" | "dateRange"
+  > = DEFAULT_FILTERS,
+  now: number = Date.now(),
 ): Card[] {
   const needle = search.trim().toLocaleLowerCase();
   return board.cards.filter(
@@ -72,6 +82,7 @@ export function visibleCards(
       (!attentionOnly || attentionReasons(card).length > 0) &&
       (filters.activity === "all" || card.activity === filters.activity) &&
       matchesRequest(card, filters.changeRequest) &&
+      matchesDateRange(card, filters.dateRange, now) &&
       (!needle ||
         `${card.title} ${card.projectName} ${card.description}`
           .toLocaleLowerCase()
@@ -158,45 +169,57 @@ export function edgeScrollSpeed(x: number, width: number): number {
   return 0;
 }
 
+type ArchiveCandidate = {
+  card: Card;
+  kind: Extract<Group["kind"], "done" | "canceled">;
+  days: number;
+  conversationAt: string;
+  dueAt: string;
+};
+
 export function mappingPreview(
   cards: readonly Card[],
   settings: Settings,
   now: number,
-): { affected: number; due: number; dueDone: number; dueCanceled: number } {
-  return cards.reduce(
-    (result, card) => {
-      if (
-        card.workspaceId === null ||
-        card.archived?.status === "archived" ||
-        card.archived?.status === "external"
-      )
-        return result;
-      const stage = resolveStage(
-        card.labels,
-        settings.groups,
-        settings.defaultStartGroup,
-      );
-      if (stage !== card.stage) result.affected += 1;
-      const kind = groupKind(stage, settings.groups);
-      if (
-        archiveGate(card) !== null &&
-        !card.archived &&
-        !card.binding &&
-        isArchiveDue(
-          kind,
-          archiveGate(card),
-          now,
-          archiveDelayFor(settings, kind),
-        )
-      ) {
-        result.due += 1;
-        if (kind === "done") result.dueDone += 1;
-        if (kind === "canceled") result.dueCanceled += 1;
-      }
-      return result;
-    },
-    { affected: 0, due: 0, dueDone: 0, dueCanceled: 0 },
-  );
+) {
+  let affected = 0;
+  const candidates: ArchiveCandidate[] = [];
+  for (const card of cards) {
+    if (
+      card.workspaceId === null ||
+      card.archived?.status === "archived" ||
+      card.archived?.status === "external"
+    )
+      continue;
+    const stage = resolveStage(
+      card.labels,
+      settings.groups,
+      settings.defaultStartGroup,
+    );
+    if (stage !== card.stage) affected += 1;
+    const kind = groupKind(stage, settings.groups);
+    const conversationAt = archiveGate(card);
+    const days = archiveDelayFor(settings, kind);
+    const dueAt = archiveDueAt(conversationAt, days);
+    if (
+      (kind === "done" || kind === "canceled") &&
+      conversationAt !== null &&
+      days !== null &&
+      dueAt !== null &&
+      !card.archived &&
+      !card.binding &&
+      isArchiveDue(kind, conversationAt, now, days)
+    )
+      candidates.push({ card, kind, days, conversationAt, dueAt });
+  }
+  return {
+    affected,
+    due: candidates.length,
+    dueDone: candidates.filter((candidate) => candidate.kind === "done").length,
+    dueCanceled: candidates.filter((candidate) => candidate.kind === "canceled")
+      .length,
+    candidates,
+  };
 }
 
 export function groupTasks(cards: readonly Card[], group: Group): Card[] {

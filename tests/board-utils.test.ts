@@ -472,7 +472,7 @@ describe("board card selection", () => {
     ];
     expect(
       mappingPreview(cards, settings, Date.parse("2026-02-01T00:00:00Z")),
-    ).toEqual({ affected: 1, due: 2, dueDone: 1, dueCanceled: 1 });
+    ).toMatchObject({ affected: 1, due: 2, dueDone: 1, dueCanceled: 1 });
   });
 });
 
@@ -520,4 +520,83 @@ it("explains an unlabeled workspace's default occupancy separately from an expli
       DEFAULT_GROUPS.find((g) => g.kind === "canceled")!,
     ),
   ).toBe("groupNeedsCanceled");
+});
+
+it("returns exactly the due candidates and proposed deadlines used by preview counts", () => {
+  const old = "2026-01-01T00:00:00Z";
+  const due = (id: string, kind = "done", overrides: Partial<Card> = {}) =>
+    card({
+      id,
+      title: `Workspace ${id}`,
+      stage: kind,
+      labels: [`task:${kind}`],
+      conversationGateEvidence: "exact",
+      conversationGateAt: old,
+      dueAt: "2099-01-01T00:00:00Z",
+      ...overrides,
+    });
+  const pending = {
+    operationId: "op",
+    status: "pending" as const,
+    kind: "automatic" as const,
+    stage: "done",
+    group: null,
+    startedAt: old,
+    archivedAt: null,
+    lastConversationAt: old,
+    detail: "Fixture archive",
+  };
+  const cards = [
+    due("done"),
+    due("canceled", "canceled", { conversationGateEvidence: "upper-bound" }),
+    due("fresh", "done", { conversationGateAt: "2026-02-01T00:00:00Z" }),
+    due("boundary", "done", { conversationGateAt: "2026-01-02T00:00:00Z" }),
+    due("unknown", "done", { conversationGateEvidence: "unknown" }),
+    due("draft", "done", { workspaceId: null }),
+    due("archiving", "done", { archived: pending }),
+    due("archived", "done", { archived: { ...pending, status: "archived" } }),
+    due("binding", "done", {
+      binding: {
+        operationId: "bind",
+        workspaceId: "w",
+        stage: "done",
+        target: { kind: "existing", workspaceId: "w" },
+      },
+    }),
+    due("conflict", "done", { labels: ["task:done", "task:canceled"] }),
+  ];
+  const settings = settingsSchema.parse({
+    archiveDoneAfterDays: 30,
+    archiveCanceledAfterDays: 7,
+  });
+  const result = mappingPreview(
+    cards,
+    settings,
+    Date.parse("2026-02-01T00:00:00Z"),
+  );
+  expect(
+    result.candidates.map(({ card, kind, days, dueAt }) => ({
+      id: card.id,
+      kind,
+      days,
+      dueAt,
+    })),
+  ).toEqual([
+    { id: "done", kind: "done", days: 30, dueAt: "2026-01-31T00:00:00.000Z" },
+    {
+      id: "canceled",
+      kind: "canceled",
+      days: 7,
+      dueAt: "2026-01-08T00:00:00.000Z",
+    },
+  ]);
+  expect(result).toMatchObject({ due: 2, dueDone: 1, dueCanceled: 1 });
+  const disabled = mappingPreview(
+    cards,
+    { ...settings, archiveDoneEnabled: false },
+    Date.parse("2026-02-01T00:00:00Z"),
+  );
+  expect(disabled.candidates.map(({ card }) => card.id)).toEqual(["canceled"]);
+  expect(disabled).toMatchObject({ due: 1, dueDone: 0, dueCanceled: 1 });
+  expect(mappingPreview([], settings, Date.now()).candidates).toEqual([]);
 });

@@ -6,7 +6,15 @@ All notable changes are documented here.
 
 ## Unreleased
 
+- Group automatic archive in its own section with a standalone master switch above Done and Canceled rules. Turning a switch off collapses its subordinate controls and retains settings and draft input; re-enabling the master previews both rules together. Show each delay once with Save inline beside its input, without the extra hierarchy line or master explanation.
+- Preview proposed archive settings and require confirmation before enabling rules or shortening delays that make tasks due; cancel without saving and invalidate stale confirmations. Show every due task with its title, status, conversation evidence, and proposed archive deadline in a scrollable list.
 - Add independent enable controls and delays for Done and Canceled automatic archive, with per-state due counts and a compatibility fallback for the former shared delay.
+
+## 0.3.1 — 2026-10-23
+
+- Add optional exclusive status labels: a new status label added outside Workboard replaces the previous one, preserving unrelated labels and leaving ambiguous conflicts for manual resolution. Disabled by default.
+- Filter tasks by their last conversation date: today, the last three calendar days, the current week, or the current month. Remember the selection per host.
+- Reorganize the READMEs and clarify the issue-first contribution workflow and shared AI instructions.
 
 ## 0.3.0 — 2026-10-13
 
