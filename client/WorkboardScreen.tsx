@@ -2572,9 +2572,7 @@ export function SettingsPage({
                   ? t.archiveCanceledAfterDays
                   : t.archiveDoneAfterDays;
                 const daysDisabled =
-                  archiveControlDisabled(daysControl) ||
-                  !enabled ||
-                  !!archiveConfirmation;
+                  archiveControlDisabled(daysControl) || !!archiveConfirmation;
                 const saveDisabled =
                   daysDisabled || !validDays || Number(daysText) === days;
                 return (
@@ -2606,77 +2604,73 @@ export function SettingsPage({
                       }
                       testID={`workboard-auto-archive-${kind}`}
                     />
-                    {enabled && (
-                      <SettingsRow
-                        label={daysLabel}
-                        hint={t.archiveDaysHint}
-                        error={validDays ? null : t.archiveDaysInvalid}
-                        testID={`workboard-archive-${kind}-delay-row`}
-                      >
-                        <View style={styles.archiveDelayControls}>
-                          <TextInput
-                            accessibilityLabel={daysLabel}
-                            accessibilityState={{ disabled: daysDisabled }}
-                            aria-invalid={!validDays}
-                            inputMode="numeric"
-                            value={daysText}
-                            onChangeText={(text) => {
-                              if (
-                                archiveControlDisabled(daysControl) ||
-                                !enabled ||
-                                archiveConfirmation
-                              )
-                                return;
-                              setArchiveDaysEdits((current) => ({
-                                ...current,
-                                [kind]: { base: days, text },
-                              }));
-                            }}
-                            editable={!daysDisabled}
-                            style={[
-                              styles.input,
-                              styles.archiveDelayInput,
-                              {
-                                color: theme.colors.foreground,
-                                borderColor: theme.colors.border,
-                              },
-                            ]}
-                            testID={`workboard-archive-${kind}-days`}
-                          />
-                          <Pressable
-                            accessibilityRole="button"
-                            accessibilityLabel={`${t.save}: ${daysLabel}`}
-                            disabled={saveDisabled}
-                            onPress={async () => {
-                              if (saveDisabled) return;
-                              await changeArchiveSettings(
-                                canceled
-                                  ? {
-                                      ...settings,
-                                      archiveCanceledAfterDays:
-                                        Number(daysText),
-                                    }
-                                  : {
-                                      ...settings,
-                                      archiveDoneAfterDays: Number(daysText),
-                                    },
-                                daysControl,
-                              );
-                            }}
-                            style={[
-                              styles.archiveSave,
-                              { borderColor: theme.colors.border },
-                              saveDisabled && { opacity: 0.45 },
-                            ]}
-                            testID={`workboard-save-archive-${kind}-days`}
-                          >
-                            <Text style={{ color: theme.colors.foreground }}>
-                              {t.save}
-                            </Text>
-                          </Pressable>
-                        </View>
-                      </SettingsRow>
-                    )}
+                    <SettingsRow
+                      label={daysLabel}
+                      hint={t.archiveDaysHint}
+                      error={validDays ? null : t.archiveDaysInvalid}
+                      testID={`workboard-archive-${kind}-delay-row`}
+                    >
+                      <View style={styles.archiveDelayControls}>
+                        <TextInput
+                          accessibilityLabel={daysLabel}
+                          accessibilityState={{ disabled: daysDisabled }}
+                          aria-invalid={!validDays}
+                          inputMode="numeric"
+                          value={daysText}
+                          onChangeText={(text) => {
+                            if (
+                              archiveControlDisabled(daysControl) ||
+                              archiveConfirmation
+                            )
+                              return;
+                            setArchiveDaysEdits((current) => ({
+                              ...current,
+                              [kind]: { base: days, text },
+                            }));
+                          }}
+                          editable={!daysDisabled}
+                          style={[
+                            styles.input,
+                            styles.archiveDelayInput,
+                            {
+                              color: theme.colors.foreground,
+                              borderColor: theme.colors.border,
+                            },
+                          ]}
+                          testID={`workboard-archive-${kind}-days`}
+                        />
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={`${t.save}: ${daysLabel}`}
+                          disabled={saveDisabled}
+                          onPress={async () => {
+                            if (saveDisabled) return;
+                            await changeArchiveSettings(
+                              canceled
+                                ? {
+                                    ...settings,
+                                    archiveCanceledAfterDays: Number(daysText),
+                                  }
+                                : {
+                                    ...settings,
+                                    archiveDoneAfterDays: Number(daysText),
+                                  },
+                              daysControl,
+                            );
+                          }}
+                          style={[
+                            styles.archiveSave,
+                            { borderColor: theme.colors.border },
+                            saveDisabled && { opacity: 0.45 },
+                          ]}
+                          testID={`workboard-save-archive-${kind}-days`}
+                        >
+                          <Text style={{ color: theme.colors.foreground }}>
+                            {t.save}
+                          </Text>
+                        </Pressable>
+                      </View>
+                    </SettingsRow>
                   </SettingsCard>
                 );
               })}

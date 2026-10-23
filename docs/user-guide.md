@@ -87,11 +87,11 @@ Reordering groups changes only their display order. It does not change the defau
 
 Automatic archive is off by default. Open **Settings → Automatic archive**:
 
-1. **Choose a rule.** Enable Done and/or Canceled with their independent switches. Both are off by default; enabling one does not enable the other.
-2. **Review due tasks.** Enabling a rule or shortening its waiting period asks for confirmation if the change makes tasks due. Inspect the full candidate list with titles, status, conversation evidence, and proposed deadlines. Longer lists scroll. Confirm to save the complete proposed settings; cancel leaves the saved rules unchanged.
-3. **Set its waiting period.** An enabled rule expands its 1–365 day input (30 by default). Use **Save** to the right to apply an edit. Unsaved input is never applied by toggling a rule.
+1. **Set waiting periods.** Each rule always shows its 1–365 day input (30 by default) and **Save** to the right. You can save a period while its rule is off; this does not enable archive.
+2. **Choose a rule.** Enable Done and/or Canceled with their independent switches. Both are off by default; enabling one does not enable the other. Toggling uses the saved period, never unsaved input.
+3. **Review due tasks.** Enabling a rule or shortening an enabled rule's period asks for confirmation if the change makes tasks due. Inspect the full candidate list with titles, status, conversation evidence, and proposed deadlines. Longer lists scroll. Confirm to save the complete proposed settings; cancel leaves the saved rules unchanged.
 
-Turning a rule off pauses it and collapses its waiting-period controls, retaining its saved period and draft input on this settings page. Turn both off to stop automatic archive. Disabling a rule, lengthening a period, or making a change that creates no newly due tasks saves without confirmation. A task's obsolete archive warning and retry delay clear when its rule is disabled or its proven conversation time is no longer due; independent warnings remain.
+Turning a rule off pauses it while keeping its waiting-period controls visible and editable. Its saved period and draft input remain on this settings page. Turn both off to stop automatic archive. Disabling a rule, lengthening a period, or making a change that creates no newly due tasks saves without confirmation. A task's obsolete archive warning and retry delay clear when its rule is disabled or its proven conversation time is no longer due; independent warnings remain.
 
 The candidate list uses the proposed settings and refreshes with board evidence, showing an empty state when nothing remains due. Concurrent settings changes invalidate confirmation; review a fresh proposal before saving.
 

@@ -944,6 +944,48 @@ async function archiveSettingsFixture(
 }
 
 it.each(["done", "canceled"] as const)(
+  "saves the disabled %s period without enabling either rule, then previews its saved period on enable",
+  async (kind) => {
+    vi.useFakeTimers();
+    const test = await archiveSettingsFixture();
+    const initial = test.store.current.settings;
+    const daysKey =
+      kind === "done" ? "archiveDoneAfterDays" : "archiveCanceledAfterDays";
+    const inputId = `workboard-archive-${kind}-days`;
+    expect(findByTestId(test.render(), inputId).props.editable).toBe(true);
+    await test.days(kind, "90");
+    expect(test.store.current.settings).toEqual({ ...initial, [daysKey]: 90 });
+    expect(() => test.confirmation()).toThrow("not found");
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(test.host.archive).not.toHaveBeenCalled();
+
+    await test.toggle(`auto-archive-${kind}`, true);
+    expect(() => test.confirmation()).toThrow("not found");
+    expect(findByTestId(test.render(), inputId).props.value).toBe("90");
+    await test.toggle(`auto-archive-${kind}`, false);
+    await test.days(kind, "7");
+    expect(test.store.current.settings).toEqual({ ...initial, [daysKey]: 7 });
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(test.host.archive).not.toHaveBeenCalled();
+    test.mutate.mockClear();
+
+    await test.toggle(`auto-archive-${kind}`, true);
+    expect(test.mutate).not.toHaveBeenCalled();
+    const confirmation = test.confirmation();
+    const rows = findByTestId(confirmation, "workboard-archive-candidates")
+      .props.children as ReactElement[];
+    expect(rows).toHaveLength(1);
+    expect(elementText(rows[0])).toContain(kind);
+    expect(findByTestId(test.render(), inputId).props.editable).toBe(false);
+    (confirmation.props.onClose as () => void)();
+    expect(test.store.current.settings).toEqual({ ...initial, [daysKey]: 7 });
+    expect(findByTestId(test.render(), inputId).props.value).toBe("7");
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(test.host.archive).not.toHaveBeenCalled();
+  },
+);
+
+it.each(["done", "canceled"] as const)(
   "previews overdue %s under the proposed rule, cancels without writes, then confirms the full settings",
   async (kind) => {
     const test = await archiveSettingsFixture();
@@ -997,9 +1039,10 @@ it("keeps migrated master-off tasks safe through periodic scans and enables only
     expect(
       findByTestId(test.render(), `workboard-auto-archive-${kind}`).props.value,
     ).toBe(false);
-    expect(() =>
-      findByTestId(test.render(), `workboard-archive-${kind}-days`),
-    ).toThrow("not found");
+    expect(
+      findByTestId(test.render(), `workboard-archive-${kind}-days`).props
+        .editable,
+    ).toBe(true);
   }
   await vi.advanceTimersByTimeAsync(60_000);
   expect(test.host.archive).not.toHaveBeenCalled();
@@ -1027,7 +1070,7 @@ it("keeps migrated master-off tasks safe through periodic scans and enables only
   expect(test.inventory.workspaces.map((w) => w.id)).toEqual(["done"]);
 });
 
-it("keeps both rules off on a fresh install and does not apply unsaved hidden delays when enabling", async () => {
+it("keeps both rules off on a fresh install and does not apply unsaved delays when enabling", async () => {
   vi.useFakeTimers();
   const test = await archiveSettingsFixture(
     settingsSchema.parse({}),
@@ -1258,14 +1301,14 @@ it("blocks repeated immediate archive saves before a rerender", async () => {
   expect(test.host.archive).not.toHaveBeenCalled();
 });
 
-it("hides a disabled rule's delay and saves a longer active delay without confirmation", async () => {
+it("shows a disabled rule's delay and saves a longer active delay without confirmation", async () => {
   const test = await archiveSettingsFixture({
     archiveCanceledEnabled: true,
     archiveCanceledAfterDays: 90,
   });
-  expect(() =>
-    findByTestId(test.render(), "workboard-archive-done-days"),
-  ).toThrow("not found");
+  expect(
+    findByTestId(test.render(), "workboard-archive-done-days").props.editable,
+  ).toBe(true);
   await test.days("canceled", "120");
   expect(test.store.current.settings).toMatchObject({
     archiveDoneEnabled: false,
@@ -1495,7 +1538,7 @@ it.each(["zh", "en"] as const)(
 );
 
 it.each(["done", "canceled"] as const)(
-  "%s rule collapses its wait controls and retains saved values and unsaved input across repeated toggles",
+  "%s rule keeps its input and Save visible and retains values across repeated toggles",
   async (kind) => {
     const test = await archiveSettingsFixture(
       {
@@ -1505,19 +1548,35 @@ it.each(["done", "canceled"] as const)(
       "2026-09-22T00:00:00Z",
     );
     const inputId = `workboard-archive-${kind}-days`;
-    expect(() => findByTestId(test.render(), inputId)).toThrow("not found");
+    const controlsVisible = () => {
+      for (const rule of ["done", "canceled"]) {
+        expect(
+          findByTestId(test.render(), `workboard-archive-${rule}-days`).props
+            .editable,
+        ).toBe(true);
+        expect(
+          findByTestId(test.render(), `workboard-save-archive-${rule}-days`)
+            .props.accessibilityRole,
+        ).toBe("button");
+      }
+    };
+    controlsVisible();
     await test.toggle(`auto-archive-${kind}`, true);
+    controlsVisible();
     const input = findByTestId(test.render(), inputId);
     expect(input.props.value).toBe(kind === "done" ? "7" : "14");
     (input.props.onChangeText as (text: string) => void)("31");
     await test.toggle(`auto-archive-${kind}`, false);
-    expect(() => findByTestId(test.render(), inputId)).toThrow("not found");
+    controlsVisible();
+    expect(findByTestId(test.render(), inputId).props.value).toBe("31");
     await test.toggle(`auto-archive-${kind}`, true);
+    controlsVisible();
     expect(findByTestId(test.render(), inputId).props.value).toBe("31");
     const other = kind === "done" ? "canceled" : "done";
-    expect(() =>
-      findByTestId(test.render(), `workboard-archive-${other}-days`),
-    ).toThrow("not found");
+    expect(
+      findByTestId(test.render(), `workboard-archive-${other}-days`).props
+        .value,
+    ).toBe(kind === "done" ? "14" : "7");
     await (
       findByTestId(test.render(), `workboard-save-archive-${kind}-days`).props
         .onPress as () => Promise<void>

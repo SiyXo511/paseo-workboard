@@ -37,7 +37,7 @@ Workboard 将活跃 workspace 汇集到同一个看板，每个 workspace 对应
 
 分组默认值、状态标签互斥、侧边栏置顶及可选的自动归档可在**设置**中调整。
 
-已完成与已废弃的独立开关、等待期限和到期确认流程见[归档指南](docs/zh-CN/user-guide.md#归档-workspace)。
+已完成与已废弃的独立开关、始终显示的等待期限控件和到期确认流程见[归档指南](docs/zh-CN/user-guide.md#归档-workspace)。
 
 ## 安装
 

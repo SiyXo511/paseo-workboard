@@ -6,6 +6,29 @@ This document records the current reproducible evidence for Workboard. It is
 not a claim that every Paseo platform, theme, or host integration has been
 tested.
 
+## Always-visible archive periods (2026-10-23, local UI follow-up)
+
+The local UI follow-up to `e4c5593` keeps both archive-period inputs and their
+inline Save buttons visible when either rule is off. The uploaded settings
+image was inspected as a file, without viewing the live screen.
+
+On macOS arm64 with Node **22.22.2** through `mise`, the two new disabled-rule
+regressions first failed because their inputs were absent, then passed. The
+focused settings, archive/P3, defaults, migrations and client-interaction suite
+passed **210 tests in 5 files**. `npm run check` passed TypeScript and **467 tests
+in 28 files**; `npm run format:check` and `npm run check:package` passed (**52
+files, 3,487,708 bytes**). Real board fixtures cover disabled period saves,
+periodic scans without enabling archive, saved-period previews, cancellation,
+retained drafts and both controls staying visible across toggles. Existing
+confirmation, failure, concurrency, duplicate-save and P3 regressions remain.
+
+The existing isolated preview reloaded with the updated client bundle; the
+plugin is running and page/script requests returned HTTP 200. Settings and both
+already-archived synthetic tasks were unchanged. Only the client controls,
+tests and bilingual documentation changed. The full host integration suite,
+rendered layout, keyboard/screen-reader behavior and CI were not rerun for this
+UI follow-up. Existing image assets remain unchanged and predate this flow.
+
 ## Independent switches and obsolete archive warnings (2026-10-23, local follow-up)
 
 The local follow-up to PR #5, based on `8542f67`, removes the master switch

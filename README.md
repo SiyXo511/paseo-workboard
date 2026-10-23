@@ -37,7 +37,7 @@ Move a task to another group to update its managed status label. The recent move
 
 Group defaults, exclusive status labels, sidebar pinning, and optional automatic archive live in **Settings**.
 
-See the [archive guide](docs/user-guide.md#archive-workspaces) for independent Done and Canceled switches, waiting periods, and due-task confirmation.
+See the [archive guide](docs/user-guide.md#archive-workspaces) for independent Done and Canceled switches, always-visible waiting-period controls, and due-task confirmation.
 
 ## Installation
 
