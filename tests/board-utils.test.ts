@@ -33,6 +33,12 @@ const card = (overrides: Partial<Card>): Card => ({
   agents: [],
   ...overrides,
 });
+const archivedAgent = {
+  id: "agent-1",
+  title: "Old session",
+  activity: "idle" as const,
+  archived: true,
+};
 const board = (cards: Card[]) => ({ cards }) as Board;
 
 describe("card drag targets", () => {
@@ -108,7 +114,11 @@ describe("board card selection", () => {
       card({ id: "unread", activity: "attention" }),
       card({ id: "conflict", stage: "conflict" }),
       card({ id: "binding", issue: "label-sync-incomplete" }),
-      card({ id: "history-unknown", issue: "conversation-unknown" }),
+      card({
+        id: "history-unknown",
+        issue: "conversation-unknown",
+        agents: [archivedAgent],
+      }),
       card({ id: "dirty", issue: "git-dirty" }),
       card({ id: "unpushed", issue: "git-unpushed" }),
       card({ id: "terminal", issue: "terminal-open" }),
@@ -129,6 +139,49 @@ describe("board card selection", () => {
       "archive-unknown",
     ]);
     expect(visibleCards(board(cards), "all", "", false)).toEqual(cards);
+  });
+
+  it("does not flag agentless workspaces for unknown conversation time", () => {
+    const unknown = card({ id: "none", issue: "conversation-unknown" });
+    expect(attentionReasons(unknown)).toEqual([]);
+    expect(
+      visibleCards(board([unknown]), "all", "", true).map((item) => item.id),
+    ).toEqual([]);
+    expect(attentionReasons(card({ issue: "git-dirty", agents: [] }))).toEqual([
+      "git-dirty",
+    ]);
+    expect(
+      attentionReasons(
+        card({ issue: "conversation-unknown", agents: [archivedAgent] }),
+      ),
+    ).toEqual(["conversation-unknown"]);
+    expect(
+      attentionReasons(
+        card({ issue: "conversation-unknown", workspaceId: null }),
+      ),
+    ).toEqual(["conversation-unknown"]);
+  });
+
+  it("keeps other attention reasons when an agentless workspace has unknown conversation time", () => {
+    const value = card({
+      issue: "conversation-unknown",
+      stage: "conflict",
+      changeRequest: {
+        forge: "github",
+        number: 42,
+        url: "https://code.example/repo/pull/42",
+        title: "Fix workspace sync",
+        state: "open",
+        checksStatus: "failure",
+        reviewDecision: "changes_requested",
+      },
+    });
+    expect(attentionReasons(value)).toEqual([
+      "labels-conflict",
+      "checks-failure",
+      "changes-requested",
+    ]);
+    expect(visibleCards(board([value]), "all", "", true)).toEqual([value]);
   });
 
   it("flags failing checks or requested changes only on current open change requests", () => {
