@@ -4,6 +4,14 @@
 
 All notable changes are documented here.
 
+## Unreleased
+
+- Replace the archive master switch with independent Done/Canceled switches, both off by default. Schema v9 preserves legacy effective rule states and delays; enabling one rule cannot temporarily enable the other.
+- Clear obsolete archive deferrals and their owned warnings when settings disable a rule or make a known task no longer due, including the save response. Re-enabling rechecks safety without inheriting the old wait; unrelated issues and unknown evidence remain protected.
+- Group archive rules in their own section. Keep each delay input and its inline Save visible regardless of the rule switch. Periods can be saved while rules are off without enabling archive; toggling retains input drafts.
+- Preview proposed archive settings and require confirmation before enabling rules or shortening delays that make tasks due; cancel without saving and invalidate stale confirmations. Show every due task with its title, status, conversation evidence, and proposed archive deadline in a scrollable list.
+- Add independent enable controls and delays for Done and Canceled automatic archive, with per-state due counts and a compatibility fallback for the former shared delay.
+
 ## 0.3.2 — 2026-10-23
 
 - Add a dedicated Workboard icon and packaged English/Chinese plugin overviews for the Paseo directory.

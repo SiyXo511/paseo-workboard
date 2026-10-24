@@ -7,7 +7,10 @@ it.each(["kind", "label", "deleted"])(
   "R01 refuses undo after the original group is %s, without native writes or archival",
   async (change) => {
     const test = fixture({
-      settings: settingsSchema.parse({ autoArchive: true }),
+      settings: settingsSchema.parse({
+        archiveDoneEnabled: true,
+        archiveCanceledEnabled: true,
+      }),
     });
     test.inventory.workspaces.push(
       workspace("w", "Workspace", ["task:review"]),

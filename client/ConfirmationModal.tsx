@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { PluginSurfaceProps } from "@getpaseo/plugin/client";
 import { Modal } from "@getpaseo/plugin/client/react-native";
@@ -7,6 +7,8 @@ import type { strings } from "./strings";
 export function ConfirmationModal({
   title,
   description,
+  children,
+  scrollable = true,
   confirmLabel,
   disabled,
   failureText,
@@ -17,6 +19,8 @@ export function ConfirmationModal({
 }: {
   title: string;
   description: string;
+  children?: ReactNode;
+  scrollable?: boolean;
   confirmLabel: string;
   disabled: boolean;
   failureText?: string;
@@ -51,8 +55,9 @@ export function ConfirmationModal({
         if (!open && !submitting.current) onClose();
       }}
     >
-      <Modal.Content>
+      <Modal.Content scrollable={scrollable}>
         <Text style={{ color: theme.colors.foreground }}>{description}</Text>
+        {children}
         {failed && (
           <Text
             accessibilityRole="alert"

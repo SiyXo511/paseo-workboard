@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import {
+  archiveDelayFor,
   archiveDueAt,
   archiveGate,
   cardsForStage,
@@ -281,6 +282,10 @@ export class Workboard {
               )
             : task.lastStage
           : task.draftStage;
+        const archiveDelay = archiveDelayFor(
+          data.settings,
+          groupKind(stage, data.settings.groups),
+        );
         return {
           ...task,
           stage,
@@ -299,8 +304,8 @@ export class Workboard {
                 ? "automatic"
                 : "manual",
           dueAt:
-            task.workspaceId && isTerminalGroup(stage, data.settings.groups)
-              ? archiveDueAt(archiveGate(task), data.settings.archiveAfterDays)
+            task.workspaceId && archiveDelay !== null
+              ? archiveDueAt(archiveGate(task), archiveDelay)
               : null,
           agents: agents.map((a) => ({
             id: a.id,
@@ -316,6 +321,13 @@ export class Workboard {
     const connection = this.connectionGeneration;
     const inventory = await this.host.inventory();
     await this.syncPins(inventory, connection);
+    if (this.archiveDeferrals.size) {
+      let cleared: string[] = [];
+      await this.store.update((data) => {
+        cleared = this.pruneArchiveDeferrals(data, inventory.workspaces);
+      });
+      for (const id of cleared) this.archiveDeferrals.delete(id);
+    }
     const prior = this.store.current;
     const observations = new Map<string, WorkspaceConversation>();
     for (const workspace of inventory.workspaces) {
@@ -337,22 +349,25 @@ export class Workboard {
             workspace,
             agents,
           );
-        else if (
-          !isArchiveDue(
-            groupKind(
-              resolveStage(
-                workspace.labels,
-                prior.settings.groups,
-                prior.settings.defaultStartGroup,
-              ),
+        else {
+          const kind = groupKind(
+            resolveStage(
+              workspace.labels,
               prior.settings.groups,
+              prior.settings.defaultStartGroup,
             ),
-            evidence.gateAt,
-            this.now(),
-            prior.settings.archiveAfterDays,
+            prior.settings.groups,
+          );
+          if (
+            !isArchiveDue(
+              kind,
+              evidence.gateAt,
+              this.now(),
+              archiveDelayFor(prior.settings, kind),
+            )
           )
-        )
-          this.archiveDeferrals.delete(previous.id);
+            this.archiveDeferrals.delete(previous.id);
+        }
       }
       observations.set(workspace.id, evidence);
     }
@@ -435,17 +450,9 @@ export class Workboard {
           task.conversationAgents = observation.agents;
         }
         task.issue =
-          task.archived?.status === "uncertain"
-            ? "native-archive-unknown"
-            : task.binding
-              ? "label-sync-incomplete"
-              : task.lastStage === "conflict"
-                ? "labels-conflict"
-                : task.conversationStatus === "unknown"
-                  ? "conversation-unknown"
-                  : task.conversationStatus === "none"
-                    ? "no-conversation"
-                    : (this.archiveDeferrals.get(task.id)?.reason ?? null);
+          this.observedIssue(task) ??
+          this.archiveDeferrals.get(task.id)?.reason ??
+          null;
       }
       for (const task of data.tasks) {
         if (
@@ -773,7 +780,8 @@ export class Workboard {
       isTerminalGroup(next.defaultStartGroup, next.groups)
     )
       throw new Error("group-default-terminal");
-    if (next.autoArchive) next.archiveMappingNeedsReview = false;
+    if (next.archiveDoneEnabled || next.archiveCanceledEnabled)
+      next.archiveMappingNeedsReview = false;
     const previousIds = previous.settings.groups.map((group) => group.id);
     const nextIds = next.groups.map((group) => group.id);
     const retained = nextIds.filter((id) => previousIds.includes(id));
@@ -871,12 +879,15 @@ export class Workboard {
         throw new Error("group-default-in-use");
       throw new Error("group-default-start-work-invalid");
     }
+    let cleared: string[] = [];
     await this.store.update((data) => {
       if (!unchanged(data))
         throw new Error("Settings changed; refresh before saving");
       for (const group of removed) delete data.cardOrderByStage[group.id];
       data.settings = next;
+      cleared = this.pruneArchiveDeferrals(data, this.inventory.workspaces);
     });
+    for (const id of cleared) this.archiveDeferrals.delete(id);
     return !isDeepStrictEqual(next.groups, previous.settings.groups);
   }
   private checkCardOrder(
@@ -1473,6 +1484,56 @@ export class Workboard {
     }
     return deferred.deferredUntil > this.now();
   }
+  private observedIssue(task: Task): string | null {
+    return task.archived?.status === "uncertain"
+      ? "native-archive-unknown"
+      : task.binding
+        ? "label-sync-incomplete"
+        : task.lastStage === "conflict"
+          ? "labels-conflict"
+          : task.conversationStatus === "unknown"
+            ? "conversation-unknown"
+            : task.conversationStatus === "none"
+              ? "no-conversation"
+              : null;
+  }
+  /** Clear only this process's obsolete deferrals and their owned warning. */
+  private pruneArchiveDeferrals(
+    data: Data,
+    workspaces: readonly Workspace[],
+  ): string[] {
+    const cleared: string[] = [];
+    for (const [id, deferred] of this.archiveDeferrals) {
+      const task = data.tasks.find((task) => task.id === id);
+      if (!task || task.archived || task.binding) {
+        cleared.push(id);
+        continue;
+      }
+      const workspace = workspaces.find(
+        (workspace) => workspace.id === task.workspaceId,
+      );
+      const stage = workspace
+        ? resolveStage(
+            workspace.labels,
+            data.settings.groups,
+            data.settings.defaultStartGroup,
+          )
+        : task.lastStage;
+      const kind = groupKind(stage, data.settings.groups);
+      const delay = archiveDelayFor(data.settings, kind);
+      const gate = archiveGate(task);
+      // Missing evidence is not proof that an enabled rule is no longer due.
+      if (
+        delay !== null &&
+        (gate === null || isArchiveDue(kind, gate, this.now(), delay))
+      )
+        continue;
+      cleared.push(id);
+      if (task.issue === deferred.reason) task.issue = this.observedIssue(task);
+    }
+    // Callers delete from the in-memory map only after the storage write succeeds.
+    return cleared;
+  }
   private async deferArchive(
     task: Task,
     reason: string,
@@ -1492,15 +1553,17 @@ export class Workboard {
     await this.issue(task.id, reason);
   }
   private async scan(scope?: ReadonlySet<string>): Promise<void> {
-    if (!this.connected || !this.store.current.settings.autoArchive) return;
+    if (!this.connected) return;
     const tasks = this.store.current.tasks;
     for (const id of this.archiveDeferrals.keys())
       if (
         !tasks.some((task) => task.id === id && !task.archived && !task.binding)
       )
         this.archiveDeferrals.delete(id);
+    const settings = this.store.current.settings;
     const candidates = tasks.filter((task) => {
       const id = task.workspaceId;
+      const kind = groupKind(task.lastStage, settings.groups);
       return (
         id &&
         (!scope || scope.has(id)) &&
@@ -1509,10 +1572,10 @@ export class Workboard {
         task.issue !== "archive-restored-workspace-unavailable" &&
         archiveGate(task) !== null &&
         isArchiveDue(
-          groupKind(task.lastStage, this.store.current.settings.groups),
+          kind,
           archiveGate(task),
           this.now(),
-          this.store.current.settings.archiveAfterDays,
+          archiveDelayFor(settings, kind),
         ) &&
         !this.archiveDeferred(
           task,
@@ -1575,7 +1638,10 @@ export class Workboard {
           groupKind(stage, this.store.current.settings.groups),
           gate,
           this.now(),
-          this.store.current.settings.archiveAfterDays,
+          archiveDelayFor(
+            this.store.current.settings,
+            groupKind(stage, this.store.current.settings.groups),
+          ),
         )
       ) {
         this.archiveDeferrals.delete(candidate.id);

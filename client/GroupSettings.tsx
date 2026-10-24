@@ -261,8 +261,10 @@ export function GroupEditor({
           Date.now(),
         )
       }
-      autoArchive={board.settings.autoArchive}
-      archiveAfterDays={board.settings.archiveAfterDays}
+      autoArchive={
+        board.settings.archiveDoneEnabled ||
+        board.settings.archiveCanceledEnabled
+      }
     />
   );
 }
@@ -277,14 +279,12 @@ function GroupForm({
   onSave,
   preview,
   autoArchive,
-  archiveAfterDays,
 }: Pick<Props, "disabled" | "saving" | "t" | "theme"> & {
   group: Group;
   onClose(): void;
   onSave(group: Group): Promise<string | null>;
   preview(group: Group): ReturnType<typeof mappingPreview>;
   autoArchive: boolean;
-  archiveAfterDays: number;
 }) {
   const initialName = groupTitle(group, t);
   const [name, setName] = useState(initialName);
@@ -376,10 +376,7 @@ function GroupForm({
           </View>
           <SettingsSelect<StageKind>
             label={t.groupType}
-            hint={t.groupTypeHints[kind].replace(
-              "{days}",
-              String(archiveAfterDays),
-            )}
+            hint={t.groupTypeHints[kind]}
             value={kind}
             options={STAGES.map((value) => ({ value, label: t.stages[value] }))}
             onValueChange={setKind}

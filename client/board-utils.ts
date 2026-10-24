@@ -1,4 +1,6 @@
 import {
+  archiveDelayFor,
+  archiveDueAt,
   archiveGate,
   isArchiveDue,
   defaultGroup,
@@ -167,41 +169,57 @@ export function edgeScrollSpeed(x: number, width: number): number {
   return 0;
 }
 
+type ArchiveCandidate = {
+  card: Card;
+  kind: Extract<Group["kind"], "done" | "canceled">;
+  days: number;
+  conversationAt: string;
+  dueAt: string;
+};
+
 export function mappingPreview(
   cards: readonly Card[],
   settings: Settings,
   now: number,
-): { affected: number; due: number } {
-  return cards.reduce(
-    (result, card) => {
-      if (
-        card.workspaceId === null ||
-        card.archived?.status === "archived" ||
-        card.archived?.status === "external"
-      )
-        return result;
-      const stage = resolveStage(
-        card.labels,
-        settings.groups,
-        settings.defaultStartGroup,
-      );
-      if (stage !== card.stage) result.affected += 1;
-      if (
-        archiveGate(card) !== null &&
-        !card.archived &&
-        !card.binding &&
-        isArchiveDue(
-          groupKind(stage, settings.groups),
-          archiveGate(card),
-          now,
-          settings.archiveAfterDays,
-        )
-      )
-        result.due += 1;
-      return result;
-    },
-    { affected: 0, due: 0 },
-  );
+) {
+  let affected = 0;
+  const candidates: ArchiveCandidate[] = [];
+  for (const card of cards) {
+    if (
+      card.workspaceId === null ||
+      card.archived?.status === "archived" ||
+      card.archived?.status === "external"
+    )
+      continue;
+    const stage = resolveStage(
+      card.labels,
+      settings.groups,
+      settings.defaultStartGroup,
+    );
+    if (stage !== card.stage) affected += 1;
+    const kind = groupKind(stage, settings.groups);
+    const conversationAt = archiveGate(card);
+    const days = archiveDelayFor(settings, kind);
+    const dueAt = archiveDueAt(conversationAt, days);
+    if (
+      (kind === "done" || kind === "canceled") &&
+      conversationAt !== null &&
+      days !== null &&
+      dueAt !== null &&
+      !card.archived &&
+      !card.binding &&
+      isArchiveDue(kind, conversationAt, now, days)
+    )
+      candidates.push({ card, kind, days, conversationAt, dueAt });
+  }
+  return {
+    affected,
+    due: candidates.length,
+    dueDone: candidates.filter((candidate) => candidate.kind === "done").length,
+    dueCanceled: candidates.filter((candidate) => candidate.kind === "canceled")
+      .length,
+    candidates,
+  };
 }
 
 export function groupTasks(cards: readonly Card[], group: Group): Card[] {

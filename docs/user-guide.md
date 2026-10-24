@@ -69,11 +69,9 @@ The **Date** filter uses the displayed last conversation time. **Today** starts 
 
 ![Switch between views and apply a date filter](../images/views-filter-en.gif)
 
-The grouped list and Settings screens are shown below with fictional tasks.
+The grouped list below uses fictional tasks.
 
 ![Grouped list](../images/list-en.png)
-
-![Workboard settings](../images/settings-en.png)
 
 ## Configure groups
 
@@ -87,7 +85,21 @@ Reordering groups changes only their display order. It does not change the defau
 
 ## Archive workspaces
 
-Automatic archival is off by default. If an upgrade has to add a missing Canceled group, it also turns automatic archive off: the new managed label may match an existing workspace. Settings retain an explanation until you re-enable it; review the due-task preview and confirm before enabling when tasks are due. Upgrades that do not add that group retain your archive preference. The switch saves immediately; when tasks are already due, Workboard asks for confirmation before enabling it. Once enabled, Workboard considers only tasks in Done or Canceled groups whose last verified user or assistant conversation is strictly older than the configured delay (30 days by default; enter an integer from 1 to 365 in settings and save), measured against Paseo's recorded activity when the exact message time is unavailable. It does not use a label-change time, task edit time, tool call, or import time as conversation activity, and a displayed `≥` bound is never used to archive.
+Automatic archive is off by default. Open **Settings → Automatic archive**:
+
+1. **Set waiting periods.** Each rule always shows its 1–365 day input (30 by default) and **Save** to the right. You can save a period while its rule is off; this does not enable archive.
+2. **Choose a rule.** Enable Done and/or Canceled with their independent switches. Both are off by default; enabling one does not enable the other. Toggling uses the saved period, never unsaved input.
+3. **Review due tasks.** Enabling a rule or shortening an enabled rule's period asks for confirmation if the change makes tasks due. Inspect the full candidate list with titles, status, conversation evidence, and proposed deadlines. Longer lists scroll. Confirm to save the complete proposed settings; cancel leaves the saved rules unchanged.
+
+Turning a rule off pauses it while keeping its waiting-period controls visible and editable. Its saved period and draft input remain on this settings page. Turn both off to stop automatic archive. Disabling a rule, lengthening a period, or making a change that creates no newly due tasks saves without confirmation. A task's obsolete archive warning and retry delay clear when its rule is disabled or its proven conversation time is no longer due; independent warnings remain.
+
+The candidate list uses the proposed settings and refreshes with board evidence, showing an empty state when nothing remains due. Concurrent settings changes invalidate confirmation; review a fresh proposal before saving.
+
+Upgrading from the former master switch retains each rule's effective state: if the master was off, both rules stay off; if it was on, each rule keeps its enabled state. All waiting periods are retained.
+
+A task becomes due only when its rule is enabled and its last verified user or assistant conversation is strictly older than the period. When the exact time is unavailable, a proven upper bound from Paseo's recorded activity can be used and is labeled as a conservative upper bound. Label changes, task edits, tool calls, import times, and displayed `≥` bounds are not archive evidence.
+
+Older settings use the former shared period for each rule until its period is edited. If an upgrade adds a missing Canceled group, automatic archive pauses because the new label may match existing workspaces; Settings explains why until you re-enable it. Other upgrades retain your archive preference.
 
 Before archiving, Workboard defers when no conversation bound can be proven or the workspace has active/waiting Agents, terminals, running scripts, or unsafe or unverified Git state. It never stashes, commits, pushes, or deletes files itself.
 

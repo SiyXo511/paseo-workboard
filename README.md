@@ -15,7 +15,7 @@ Workboard brings active workspaces into one board, with one task per workspace. 
 - **Status linked to workspace labels.** Move a task between groups or change its managed label in Paseo. Both update the same status while preserving unrelated labels. Optional exclusive status labels replace a previous managed label when a new one can be identified.
 - **Activity at a glance.** See Agent activity, conversation dates, and PR/MR, CI, and review information supplied by Paseo. Filter by project, activity, PR/MR condition, attention, or last conversation date.
 - **A configurable workflow.** Customize groups and their defaults, reorder tasks and groups by dragging or keyboard controls, and optionally pin in-progress workspaces in the sidebar.
-- **Optional automatic archiving.** Archive eligible completed or canceled workspaces after a configurable delay from their last verified conversation, with activity and Git safety checks. Disabled by default.
+- **Optional automatic archiving.** Configure Done and Canceled rules independently to archive eligible workspaces after their respective delays from their last verified conversation, with activity and Git safety checks. Disabled by default.
 
 The interface follows Paseo's desktop/Web language and theme, with English and Chinese text and dates.
 
@@ -37,7 +37,7 @@ Move a task to another group to update its managed status label. The recent move
 
 Group defaults, exclusive status labels, sidebar pinning, and optional automatic archive live in **Settings**.
 
-![Workboard settings](images/settings-en.png)
+See the [archive guide](docs/user-guide.md#archive-workspaces) for independent Done and Canceled switches, always-visible waiting-period controls, and due-task confirmation.
 
 ## Installation
 
