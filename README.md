@@ -76,13 +76,13 @@ The [user guide](docs/user-guide.md) covers filters, ordering, undo, draft recov
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for issue and PR contents, local setup, and required checks. AI coding assistants must also follow [AGENTS.md](AGENTS.md); `CLAUDE.md` links to the same instructions.
 
-For development, use the runtime pinned in `mise.toml`:
+For development, install Node.js (22.22.2 recommended, matching CI), npm, and Git.
+See [the setup guide](CONTRIBUTING.md#setup-and-checks) for requirements; no runtime manager is required:
 
 ```sh
-mise install
-mise exec -- npm ci --ignore-scripts
-mise exec -- npm run check
-mise exec -- npm run format:check
+npm ci
+npm run check
+npm run format:check
 ```
 
 Use the [isolated integration fixture](tests/integration/README.md) for host-level checks and local plugin evaluation.
@@ -90,7 +90,7 @@ Use the [isolated integration fixture](tests/integration/README.md) for host-lev
 ## Limitations
 
 - Some label and workspace operations use an internal Paseo bridge that reuses the host session and validates responses. The manifest minimum does not guarantee compatibility with every later Paseo release; consult [verification](docs/verification.md) before upgrading.
-- Automatic archiving can stop Agents and terminals and may remove a managed worktree. Missing conversation evidence or unsafe state postpones it. Workboard cannot restore a native archive or a removed worktree.
+- Automatic archiving can stop Agents and terminals and may remove a managed worktree. Missing conversation evidence, including for children no longer listed, an incomplete provider-child inventory, or unsafe state postpones it. Subscription recovery requires a fresh child inventory before archive. Workboard cannot restore a native archive or a removed worktree.
 - Labels, archive state, and sidebar pins can change outside Workboard. The host does not expose every atomic operation; uncertain outcomes require manual review instead of destructive retries.
 - The List view has recorded Chrome checks. Electron, native mobile, long-duration edge autoscroll, and `Escape` or blur during an active drag remain unverified; see the verification guide for the full scope.
 

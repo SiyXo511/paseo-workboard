@@ -19,13 +19,12 @@ The npm package includes the manifest, entries, `client/`, `server/`, `shared/`,
 3. From a clean checkout, run:
 
    ```sh
-   mise install
-   mise exec -- npm ci
-   mise exec -- npm run check
-   mise exec -- npm run format:check
-   mise exec -- npm run check:package
+   npm ci
+   npm run check
+   npm run format:check
+   npm run check:package
    WORKBOARD_RELEASE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/workboard-release.XXXXXX")"
-   mise exec -- npm pack --pack-destination "$WORKBOARD_RELEASE_DIR"
+   npm pack --pack-destination "$WORKBOARD_RELEASE_DIR"
    ```
 
 4. Follow the [isolated integration guide](../tests/integration/README.md) to start a marked, temporary Paseo home. Unpack the generated tarball into a separate temporary directory and install that directory into the isolated daemon. Do not install development dependencies in the unpacked package:
@@ -35,7 +34,7 @@ The npm package includes the manifest, entries, `client/`, `server/`, `shared/`,
    tar -xzf "$WORKBOARD_RELEASE_DIR/paseo-workboard-0.3.2.tgz" -C "$WORKBOARD_PACKAGE_DIR"
    paseo plugin install "$WORKBOARD_PACKAGE_DIR/package" --home "$WORKBOARD_INTEGRATION_HOME"
    paseo plugin ls --home "$WORKBOARD_INTEGRATION_HOME" --json
-   mise exec -- npm run test:integration
+   npm run test:integration
    ```
 
    Substitute the release version in the filename. Require plugin `running`, a connected board and passing integration tests. Check changed visual behavior only with disposable tasks. Stop the isolated daemon before deleting its home or the unpacked plugin.
@@ -68,7 +67,7 @@ Then verify the registry installation in the isolated daemon:
 ```sh
 paseo plugin install npm:paseo-workboard@0.3.2 --home "$WORKBOARD_INTEGRATION_HOME"
 paseo plugin ls --home "$WORKBOARD_INTEGRATION_HOME" --json
-mise exec -- npm run test:integration
+npm run test:integration
 ```
 
 Do not reuse an existing npm version. Release metadata updates must not leave GitHub and npm versions or plugin IDs out of sync.

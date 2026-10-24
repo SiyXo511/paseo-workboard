@@ -6,6 +6,8 @@ All notable changes are documented here.
 
 ## Unreleased
 
+- Defer automatic archive when provider children cannot be enumerated or their conversation history cannot be bounded, including after a restart. Preserve the displayed conversation time without using an old parent timestamp as proof of child inactivity.
+- Use standard Node.js/npm development commands, isolate test Git configuration, and add Windows unit checks to CI.
 - Replace the archive master switch with independent Done/Canceled switches, both off by default. Schema v9 preserves legacy effective rule states and delays; enabling one rule cannot temporarily enable the other.
 - Clear obsolete archive deferrals and their owned warnings when settings disable a rule or make a known task no longer due, including the save response. Re-enabling rechecks safety without inheriting the old wait; unrelated issues and unknown evidence remain protected.
 - Group archive rules in their own section. Keep each delay input and its inline Save visible regardless of the rule switch. Periods can be saved while rules are off without enabling archive; toggling retains input drafts.

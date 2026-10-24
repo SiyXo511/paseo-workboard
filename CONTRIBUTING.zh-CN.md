@@ -31,25 +31,30 @@
 
 ## 环境与检查
 
-通过 `mise` 使用项目运行时：
+安装 Node.js、npm 和 Git，确保 `node`、`npm`、`git` 在 `PATH` 中。建议开发使用 Node 22.22.2，与主要 CI 环境一致。包的运行时要求由 `package.json` 声明，开发工具还有额外要求（Vite 在 Node 22 上至少需要 22.12）。安装方式不限，无需特定运行时管理器。只有运行插件或隔离宿主集成测试时才需要 Paseo。
+
+安装锁定的开发依赖并运行检查：
 
 ```sh
-mise install
-mise exec -- npm ci --ignore-scripts
-mise exec -- npm run check
-mise exec -- npm run format:check
+npm ci
+npm run check
+npm run format:check
 ```
 
 `npm run check` 会运行 TypeScript 和单元测试。开发时先运行最小相关测试，再按改动类型执行检查：
 
-| 改动                                  | 必需检查                                                                      |
-| ------------------------------------- | ----------------------------------------------------------------------------- |
-| 代码                                  | 相关测试、`mise exec -- npm run check` 和 `mise exec -- npm run format:check` |
-| 纯文档                                | 格式、链接与源码一致性，无需运行单元测试                                      |
-| 包、依赖、manifest 或 README 打包契约 | 额外运行 `mise exec -- npm run check:package`                                 |
-| 宿主兼容桥接                          | 额外按[隔离集成指南](tests/integration/README.zh-CN.md)运行受支持宿主的测试   |
+| 改动                                  | 必需检查                                                                    |
+| ------------------------------------- | --------------------------------------------------------------------------- |
+| 代码                                  | 相关测试、`npm run check` 和 `npm run format:check`                         |
+| 纯文档                                | 格式、链接与源码一致性，无需运行单元测试                                    |
+| 包、依赖、manifest 或 README 打包契约 | 额外运行 `npm run check:package`                                            |
+| 宿主兼容桥接                          | 额外按[隔离集成指南](tests/integration/README.zh-CN.md)运行受支持宿主的测试 |
 
 包检查验证待发布文件清单和 README 必需标题，不会执行发布。保留英文 README 的 `## Installation` 与 `## Limitations` 标题，Paseo Cafe 会用它们提取内容。[验证记录](docs/zh-CN/verification.md)只记录实际执行过的检查。
+
+CI 在 Ubuntu 和 Windows 上使用 Node 22.22.2 运行 TypeScript 与单元测试，并在 Ubuntu 上执行格式和包检查。独立的 Ubuntu 24.04 任务会将实际 npm tarball 安装到一次性的 Paseo **0.11.0** 和 **0.12.0** 宿主，运行集成测试和 Chromium UI 冒烟测试。浏览器失败时保留 trace、截图和隔离 daemon 日志。固定的 `check` 任务要求所有矩阵任务成功；依赖失败或跳过也不会通过。仓库维护者应将 `check` 设为 `main` 的必选检查，workflow 本身不能启用分支保护。相同的本地入口和 UI 覆盖边界见[集成指南](tests/integration/README.zh-CN.md)。
+
+Bug 修复应包含在问题版本失败、修复后通过的回归测试；归档和活动状态改动按相关性覆盖历史缺失或回放、Agent 移除、重启等场景。单测绿灯只证明已覆盖的场景。检查 PR 当前 head 的实际运行结果；等待批准、跳过或没有运行都不算通过。
 
 ## 变更边界
 

@@ -19,13 +19,12 @@ npm 包包含 manifest、入口、`client/`、`server/`、`shared/`、中英文 
 3. 在干净 checkout 中运行：
 
    ```sh
-   mise install
-   mise exec -- npm ci
-   mise exec -- npm run check
-   mise exec -- npm run format:check
-   mise exec -- npm run check:package
+   npm ci
+   npm run check
+   npm run format:check
+   npm run check:package
    WORKBOARD_RELEASE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/workboard-release.XXXXXX")"
-   mise exec -- npm pack --pack-destination "$WORKBOARD_RELEASE_DIR"
+   npm pack --pack-destination "$WORKBOARD_RELEASE_DIR"
    ```
 
 4. 按[隔离集成测试指南](../../tests/integration/README.zh-CN.md)启动带标记的临时 Paseo home。将生成的包解压到另一个临时目录，并安装到隔离 daemon；不要给解压包安装开发依赖：
@@ -35,7 +34,7 @@ npm 包包含 manifest、入口、`client/`、`server/`、`shared/`、中英文 
    tar -xzf "$WORKBOARD_RELEASE_DIR/paseo-workboard-0.3.2.tgz" -C "$WORKBOARD_PACKAGE_DIR"
    paseo plugin install "$WORKBOARD_PACKAGE_DIR/package" --home "$WORKBOARD_INTEGRATION_HOME"
    paseo plugin ls --home "$WORKBOARD_INTEGRATION_HOME" --json
-   mise exec -- npm run test:integration
+   npm run test:integration
    ```
 
    文件名替换为本次版本。要求插件 `running`、看板已连接且集成测试通过；视觉行为仅用虚构任务检查。先停止隔离 daemon，再删除其 home 和解压包。
@@ -68,7 +67,7 @@ npm view paseo-workboard@0.3.2 version dist.integrity --registry https://registr
 ```sh
 paseo plugin install npm:paseo-workboard@0.3.2 --home "$WORKBOARD_INTEGRATION_HOME"
 paseo plugin ls --home "$WORKBOARD_INTEGRATION_HOME" --json
-mise exec -- npm run test:integration
+npm run test:integration
 ```
 
 不要复用已发布 npm 版本；发布说明更新也应保持 GitHub 与 npm 的版本及插件 ID 一致。

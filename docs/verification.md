@@ -6,13 +6,121 @@ This document records the current reproducible evidence for Workboard. It is
 not a claim that every Paseo platform, theme, or host integration has been
 tested.
 
+## Host and UI CI (2026-10-24 follow-up)
+
+The follow-up to `112ef41` adds Ubuntu/Windows unit checks, a Paseo 0.11.0/0.12.0
+host matrix on Ubuntu 24.04, and a fixed `check` job that requires every matrix
+job to succeed. The host runner installs the actual packed plugin into a new
+marked, loopback-only home with relay disabled, then runs integration and
+Chromium UI tests. Failed runs retain daemon logs, screenshots and traces.
+
+Local validation on macOS arm64 with Node **22.22.2**:
+
+- A clean `npm ci --offline --no-audit --no-fund` installed the updated lockfile.
+- `npm run check`: TypeScript and **498 tests in 29 files** passed after the archive fixes.
+- `npm run format:check` and `npm run check:package` passed.
+- The actual tarball contains **52 approved files**, **3,488,672 bytes**, all
+  matching the source byte for byte. SHA-256:
+  `49f3635d0871ac19a4296780a3db03ed286b305a3fea2982ada223b005389974`.
+- `npm run test:host -- --ui` passed with each official npm CLI below. Both
+  daemons were stopped and their temporary homes removed afterward.
+
+| Paseo  | Integration    | Chromium UI |
+| ------ | -------------- | ----------- |
+| 0.11.0 | 13/13, 32.20 s | 2/2, 8.3 s  |
+| 0.12.0 | 13/13, 31.82 s | 2/2, 7.4 s  |
+
+The English desktop UI checks create a draft through the page, display it in
+Board and List, verify both archive-period inputs remain visible while disabled,
+and cancel an archive confirmation while retaining the candidate and disabled
+rule. Both tests reject uncaught page errors. Initial harness failures exposed
+ambiguous control locators and the plugin's startup window; these were corrected
+before the passing runs and verified screenshot/trace/log collection. This is
+smoke coverage, not full visual, accessibility, mobile or provider coverage.
+
+The archive regressions first reproduced unsafe use of a vanished child's prior
+history and a temporary child-list failure remaining cached indefinitely. They
+now keep any previously observed child missing from inventory unknown across
+refresh and restart, including legacy records and earlier exact, upper-bound or
+empty reads. A child still in inventory with a currently verified empty timeline
+remains eligible. Real `PaseoHost` and `Workboard` tests cover a new child message
+followed immediately by removal, then restart with a new host and store. They
+also verify the 60-second retry boundary through repeated failures and recovery,
+successful archive after enumeration recovers, and an archived parent whose
+activity time is unchanged. All four original review probes pass, with the host
+retry clock advanced for recovery. Obsolete child gate fields and the tests that
+allowed old history to authorize archive after removal were removed.
+
+A v6 migration regression also reproduced premature archive when an observed
+child had no message timestamp. A probe running the actual v6 host and Workboard (`e179cf7`)
+also showed that a failed listing could reset `seenWhileLive` to false while
+retaining cached children. Migration now preserves provider child IDs even in
+that state. Regression tests verify the archive gate after migration, refresh
+and restart; unobserved ordinary placeholder IDs are still removed.
+
+Additional cache regressions reproduced stale complete child inventories after
+subscription recovery or request failure, and stale in-flight results becoming
+complete again. All **11 new regression cases** failed before the fix and pass
+now. They cover new children during an event gap, retained children on listing
+failure, the 60-second retry boundary, invalidation while a listing is pending,
+and invalidation during multi-parent iteration. The archived-parent case also
+checks retained children after subscription recovery. The three new independent
+review probes and the five earlier archive/migration probes all pass locally.
+Ordinary transport closure is covered by the restored snapshot path; subscription
+request failure uses the separate error callback. These cases use the real host
+and board classes with API substitutes, not a live network interruption.
+
+The GitHub workflow has not run for this local revision, so Ubuntu/Windows CI
+execution is still unverified. No push, publication or repository-setting change
+was made. `main` still needs repository-level enforcement of the required
+`check` status; a workflow file does not configure that setting. The older
+record below describes the earlier commit, not this expanded test matrix.
+
+## Portable development and archive safety (2026-10-24)
+
+The local change based on `a0b11e8` passed on macOS arm64 with Node **22.22.2**:
+
+- A clean `npm ci` installed the locked dependencies.
+- `npm run check`: TypeScript and **477 tests in 29 files** passed.
+- `npm run format:check` and `npm run check:package` passed. Project checks ran
+  with Node/npm and system tools on `PATH`, without a runtime-manager command.
+- The actual tarball contains **52 approved files**, **3,488,226 bytes**, all
+  matching the source byte for byte. SHA-256:
+  `a9597eb65a2f026fee278d425e6e0e8dad4fb2b57b3f515212f6badd3ed558b9`.
+- Installing that unpacked package without development dependencies passed
+  **13/13 integration tests in 25.70 seconds** on Paseo **0.12.0**, in a fresh,
+  marked temporary home. The daemon was stopped and its home removed afterward.
+
+The child-enumeration regressions first reproduced premature archive for both
+unavailable and refused inventories. They now verify unknown archive evidence,
+retained display time, refresh, restart, and recovery after complete enumeration.
+Enumerated children with replayed or partial history also failed before the fix;
+they now block archival while a verified empty child timeline remains eligible.
+The real-host archived-parent test also retains display time while requiring an
+unknown gate and no due date. Git tests isolate personal configuration, and the
+temporary-home tests cover a missing optional alias and rejection boundaries.
+
+New activity and removed-Agent regressions pass here and fail when the actual
+PR #7 and #9 patches are applied separately to this baseline. These are targeted
+patch-on-baseline checks, not full builds of those historical PR heads. Their
+previous green CI runs did not exercise these cases.
+
+At `112ef41`, the workflow added Windows unit/type checks and required their success in
+the existing Ubuntu `check` job. This workflow has not run on GitHub for this
+local revision; Windows execution is not claimed. CI still does not run a Paseo
+daemon or render the UI. The exact minimum host 0.11.0 and visual behavior were
+not tested in this change. At audit time, the [main branch API](https://api.github.com/repos/fxbing/paseo-workboard/branches/main)
+reported protection disabled, and the [ruleset API](https://api.github.com/repos/fxbing/paseo-workboard/rulesets)
+returned no rulesets; required checks therefore still need repository-level
+enforcement. Repository settings were not changed.
+
 ## Always-visible archive periods (2026-10-23, local UI follow-up)
 
 The local UI follow-up to `e4c5593` keeps both archive-period inputs and their
 inline Save buttons visible when either rule is off. The uploaded settings
 image was inspected as a file, without viewing the live screen.
 
-On macOS arm64 with Node **22.22.2** through `mise`, the two new disabled-rule
+On macOS arm64 with Node **22.22.2**, the two new disabled-rule
 regressions first failed because their inputs were absent, then passed. The
 focused settings, archive/P3, defaults, migrations and client-interaction suite
 passed **210 tests in 5 files**. `npm run check` passed TypeScript and **467 tests
@@ -33,7 +141,7 @@ UI follow-up. Existing image assets remain unchanged and predate this flow.
 
 The local follow-up to PR #5, based on `8542f67`, removes the master switch
 and supersedes the uncommitted pre-enable setup flow. On macOS arm64 with Node
-**22.22.2** through `mise`:
+**22.22.2**:
 
 - Focused settings, archive, defaults, migration, configuration, candidate,
   interaction, model and startup regressions: **270 tests in 9 files**.
@@ -84,7 +192,7 @@ minimum-host compatibility, and CI are not claimed for this revision.
 ## Independent archive rules and confirmation (2026-10-23)
 
 The PR #5 follow-up integrates main at `4360016` and passed on macOS arm64
-with Node **22.22.2** through `mise`:
+with Node **22.22.2**:
 
 - Focused settings, candidates, client interactions, archive, configuration and
   archive-default safety tests: **222 tests in 6 files**.
@@ -177,13 +285,13 @@ been exercised in a rendered client during this release check.
 ## Verified baseline
 
 On 2026-10-13, the dual-view source (still schema v8) was checked on macOS arm64 with
-Node 22.22.2 through `mise`.
+Node 22.22.2.
 
 ```sh
-mise exec -- npm run check
+npm run check
 ```
 
-This command passed with **398 unit tests in 28 files**. The deterministic suite
+The project check passed with **398 unit tests in 28 files**. The deterministic suite
 covers migrations from v1–v7 to v8, persistent column order and reset, complete
 column compare-and-swap, filtered drag anchors, compact reorder controls,
 optimistic failure recovery, archive recovery and evidence, settings safety,
@@ -329,5 +437,5 @@ Cafe catalog promotion remains separate from npm publication.
 
 Before changing the compatibility bridge, repeat the supported-version checks
 and add evidence for the affected host behavior. For package validation, run
-`mise exec -- npm run check:package`; it validates package contents without
+`npm run check:package`; it validates package contents without
 publishing.

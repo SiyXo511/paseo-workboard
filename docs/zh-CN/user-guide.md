@@ -101,7 +101,7 @@
 
 旧设置继续用原共享期限，直到各条规则分别修改期限。升级时若补建缺失的已废弃组，会暂停自动归档，因为新标签可能匹配已有 workspace；设置页会持续说明原因，直到重新开启。其它升级保留原归档偏好。
 
-归档前，如果无法证明任何对话上界，或 workspace 有运行/等待的 Agent、terminal、运行脚本，或 Git 状态不安全/无法核实，Workboard 会延期。它不会自动 stash、commit、push 或删除文件。
+归档前，如果无法枚举 provider 子 Agent、无法证明任何对话上界，或 workspace 有运行/等待的 Agent、terminal、运行脚本，或 Git 状态不安全/无法核实，Workboard 会延期。已枚举子 Agent 的历史若无法证明上界，同样延期归档；已确认空历史除外。子 Agent 清单不完整时，归档资格保持未知，卡片仍保留对话显示时间；父 Agent 的旧时间不能证明子 Agent 没有新活动。已观察的子 Agent 从清单消失后，同样阻止自动归档。上次读取即使得到了精确时间、上界或空历史，也不能证明移除前没有新消息；刷新和重启后仍保留原显示时间。订阅恢复或失败后，Workboard 重新检查子 Agent 清单，再判断能否归档；检查失败时保留已观察的子 Agent。未归档父 Agent 的子 Agent 枚举失败后，一分钟后重试。它不会自动 stash、commit、push 或删除文件。
 
 自动归档调用 Paseo 原生 workspace 归档。这可能停止 Agent 与 terminal，并可能移除托管 worktree。成功需要原生响应 `error=null` 且存在 `archivedAt`，随后刷新确认 workspace 已从原生活跃列表消失；不确定结果会保留供人工处理，不会盲目重试。
 
@@ -128,4 +128,4 @@ Paseo 原生的 **Archive merged PR workspaces** 设置是独立功能。它按�
 - 插件 manifest 设置 Paseo 最低版本。内部标签桥接在后续版本中可能需要调整；已验证宿主见[验证记录](verification.md)。
 - 本地筛选、视图选择、分别保存的看板/列表折叠状态及看板列宽按客户端与 host 保存，不是共享任务数据。
 - workspace 标签以及原生归档/置顶可以在 Workboard 外变化。插件会尽可能重读状态，但原生 API 不提供所有原子操作。
-- Paseo 0.9.1 对已归档 parent 拒绝 provider 子 agent API，其 pi provider 回放历史时不给每行时间戳；Workboard 因此回退到展示用边界，只在无法证明任何上界时延期归档。
+- Paseo 0.9.1 对已归档 parent 拒绝 provider 子 agent API，其 pi provider 回放历史时不给每行时间戳；Workboard 保留展示用边界，在子 Agent 清单不完整，或对话证据无法安全界定父、子 Agent 历史的上界时延期归档。

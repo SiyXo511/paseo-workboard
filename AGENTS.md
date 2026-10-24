@@ -8,7 +8,7 @@ source of instructions. Both belong in Git, but neither belongs in the npm packa
 
 - Read [README.md](README.md) and [CONTRIBUTING.md](CONTRIBUTING.md) before making
   changes. The contribution guide owns the issue/PR workflow and required checks.
-- Use the current source, `package.json`, `paseo-plugin.json`, and `mise.toml`
+- Use the current source, `package.json`, `paseo-plugin.json`, and `.github/workflows/ci.yml`
   for behavior, commands, compatibility requirements, and runtime versions.
 - Read [architecture](docs/architecture.md) for changes to state or host
   operations, [verification](docs/verification.md) for actual test evidence, and
@@ -79,12 +79,13 @@ source of instructions. Both belong in Git, but neither belongs in the npm packa
 
 ## Validation
 
-Use the Node version pinned in `mise.toml`; run commands through `mise exec --`.
+Use Node.js, npm, and Git as described in CONTRIBUTING.md; Node 22.22.2 matches
+the primary CI baseline. Do not require a particular runtime manager.
 Follow the change-specific check table in [CONTRIBUTING.md](CONTRIBUTING.md).
-For code changes, run focused tests first, then `mise exec -- npm run check` and
-`mise exec -- npm run format:check`. Documentation-only work needs formatting,
+For code changes, run focused tests first, then `npm run check` and
+`npm run format:check`. Documentation-only work needs formatting,
 link, and semantic checks. Package-related work also needs
-`mise exec -- npm run check:package`.
+`npm run check:package`.
 
 Unit tests must not depend on a daemon, browser, network service, model, or
 personal Paseo home. Changes to the host bridge require supported-host tests
