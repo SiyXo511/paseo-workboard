@@ -125,7 +125,7 @@ When stored data has an unsupported version or cannot be parsed, the board shows
 
 ## Limits and support boundaries
 
-- The plugin manifest sets the minimum Paseo version. Its internal label bridge may require changes later; see [verification](verification.md) for tested hosts.
+- The plugin manifest sets the minimum Paseo version. Its internal label bridge may require changes later; see the README installation and limitations notes for the compatibility range.
 - Local filters, view choice, separate board/list collapsed groups, and board column widths are stored per client and host; they are not shared task data.
 - Workspace labels and native archive/pin operations can change outside Workboard. The plugin rechecks state where possible, but native APIs do not provide every atomic operation.
-- Paseo 0.9.1 refuses the provider-subagent API for archived parents, and its pi provider replays history without per-row timestamps, so Workboard retains displayed bounds and defers automatic archive when child inventory is incomplete or conversation evidence cannot safely bound parent and child history.
+- Paseo refuses the provider-subagent API for archived parents, and its pi provider replays history without per-row timestamps, so Workboard retains displayed bounds and defers automatic archive when child inventory is incomplete or conversation evidence cannot safely bound parent and child history.

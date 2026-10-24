@@ -250,7 +250,7 @@ export class PaseoHost implements Host {
     }
     if (!this.subscriptions.length) {
       try {
-        // In 0.9.1 the subscription is filtered, not paged (session.ts handleFetch*).
+        // Host subscriptions are filtered, not paged (session.ts handleFetch*).
         // A single unfiltered subscription covers updates beyond the first 200 rows.
         this.own(
           (

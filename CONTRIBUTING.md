@@ -78,8 +78,10 @@ test while iterating, then choose the checks required by the change:
 
 The package check validates the publishable file list and required README
 headings without publishing anything. Keep the English `## Installation` and
-`## Limitations` headings; Paseo Cafe uses them for excerpts. Record only checks
-actually performed in [verification](docs/verification.md).
+`## Limitations` headings; Paseo Cafe uses them for excerpts. Report only checks
+that were actually performed, in the pull request or on the pull request's CI
+run. Verification logs, dated test records, and incident write-ups stay in the
+issue or PR discussion, not in the repository.
 
 CI runs TypeScript and unit tests on Ubuntu and Windows with Node 22.22.2,
 plus formatting and package checks on Ubuntu. Separate Ubuntu 24.04 jobs install the
@@ -108,19 +110,24 @@ pending approval, skipped jobs, or no run are not passing results.
   36px minimum interactive target used by compact controls.
 - Do not add dependencies for a small UI behavior when the public SDK and
   React Native API already cover it.
+- Describe the current design and its constraints, not the history that led to
+  them. Do not add changelogs, dated verification records, troubleshooting
+  logs, or issue/PR summaries; those belong in GitHub Releases, issues, and pull
+  requests.
+- A user-visible change needs its documentation updated in the same pull
+  request, in English and Chinese.
 
 ## Architecture and compatibility
 
-Start with [the architecture guide](docs/architecture.md), then check
-[verification](docs/verification.md) for current evidence and limits. The
+Start with [the architecture guide](docs/architecture.md). The
 server owns the durable board projection and native mutations; the client is a
 theme-aware React Native surface. Version-sensitive integration lives in
 `server/paseo-compat.ts` for host operations and `client/paseo-language.ts` for
 the Web/Electron language setting.
 
 Changes to that compatibility boundary must include tests for the supported
-Paseo version and an update to the verification or release documentation when
-the supported range or evidence changes. Do not infer compatibility from TypeScript
+Paseo versions, and must update the manifest minimum, README, and release notes
+when the supported range changes. Do not infer compatibility from TypeScript
 types alone.
 
 `paseo-plugin.json` owns the minimum Paseo version. Keep all three Paseo SDK
@@ -136,4 +143,8 @@ responsible for understanding the change, reviewing it, and verifying its behavi
 
 ## Releases
 
-For packaging and release work, follow [the release guide](docs/releasing.md).
+Every user-facing version is released as an annotated Git tag plus a GitHub
+Release whose notes are the upgrade record. The repository keeps no changelog.
+Users install from the default branch, and the package is not distributed
+through npm. For packaging and release work, follow [the release
+guide](docs/releasing.md).

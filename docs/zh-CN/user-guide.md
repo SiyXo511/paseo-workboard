@@ -125,7 +125,7 @@ Paseo 原生的 **Archive merged PR workspaces** 设置是独立功能。它按�
 
 ## 限制与支持边界
 
-- 插件 manifest 设置 Paseo 最低版本。内部标签桥接在后续版本中可能需要调整；已验证宿主见[验证记录](verification.md)。
+- 插件 manifest 设置 Paseo 最低版本。内部标签桥接在后续版本中可能需要调整；宿主兼容范围与剩余边界见 README 的安装说明和限制说明。
 - 本地筛选、视图选择、分别保存的看板/列表折叠状态及看板列宽按客户端与 host 保存，不是共享任务数据。
 - workspace 标签以及原生归档/置顶可以在 Workboard 外变化。插件会尽可能重读状态，但原生 API 不提供所有原子操作。
-- Paseo 0.9.1 对已归档 parent 拒绝 provider 子 agent API，其 pi provider 回放历史时不给每行时间戳；Workboard 保留展示用边界，在子 Agent 清单不完整，或对话证据无法安全界定父、子 Agent 历史的上界时延期归档。
+- Paseo 对已归档 parent 拒绝 provider 子 agent API，其 pi provider 回放历史时不给每行时间戳；Workboard 保留展示用边界，在子 Agent 清单不完整，或对话证据无法安全界定父、子 Agent 历史的上界时延期归档。

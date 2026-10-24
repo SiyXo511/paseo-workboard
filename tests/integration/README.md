@@ -27,7 +27,8 @@ npm run test:host -- --ui
 ```
 
 On Linux, `npx playwright install --with-deps --only-shell chromium` also installs the required
-system libraries. CI runs this command against Paseo 0.11.0 and 0.12.0. The smoke
+system libraries. CI runs this command against every Paseo version in the `host`
+matrix of `.github/workflows/ci.yml`. The smoke
 suite uses fictional tasks and the deterministic fixture provider; it covers
 view switching and archive-setting interactions, and fails on uncaught page
 errors. It does not cover all layouts, themes, accessibility, mobile clients,
