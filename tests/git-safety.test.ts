@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, writeFile, rm } from "node:fs/promises";
-import { devNull, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 import { checkGitSafety } from "../server/git-safety";
@@ -51,7 +51,9 @@ it("protects real dirty/untracked/unpushed Git work and requires an upstream", a
     expect(git("config", "--get", "core.hooksPath").trim()).toBe(badHooks);
     process.env = isolatedGitEnvironment(template);
     expect(git("config", "--get", "core.hooksPath").trim()).toBe(template);
-    expect(git("config", "--get", "core.excludesFile").trim()).toBe(devNull);
+    expect(git("config", "--get", "core.excludesFile").trim()).toBe(
+      join(template, "disabled-config"),
+    );
     git("config", "user.name", "Workboard fixture");
     git("config", "user.email", "fixture@example.invalid");
     await writeFile(join(root, "a"), "initial\n");

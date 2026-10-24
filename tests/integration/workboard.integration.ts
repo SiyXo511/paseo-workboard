@@ -1,6 +1,5 @@
 import { execFile } from "node:child_process";
 import { mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
-import { devNull } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
@@ -1078,8 +1077,9 @@ describe("isolated Paseo workboard", () => {
       ["config", "core.hooksPath", path.join(home, "git-templates")],
       seed,
     );
-    await git(["config", "core.excludesFile", devNull], seed);
-    await git(["config", "core.attributesFile", devNull], seed);
+    const emptyConfig = path.join(home, "git-templates", "disabled-config");
+    await git(["config", "core.excludesFile", emptyConfig], seed);
+    await git(["config", "core.attributesFile", emptyConfig], seed);
     await git(["config", "core.autocrlf", "false"], seed);
     await git(["config", "commit.gpgsign", "false"], seed);
     await git(["config", "user.name", "Test"], seed);
