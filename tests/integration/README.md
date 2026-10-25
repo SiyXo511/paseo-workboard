@@ -19,6 +19,27 @@ suite. It chooses a loopback port, disables relay access, stops the daemon, and
 removes the home after the run. A failed stop preserves the home for diagnosis.
 It never uses an existing Paseo home or daemon.
 
+After the integration suite, the runner also checks that Workboard does not
+resume idle Agents (`scripts/check-idle-wake.mjs`): it seeds idle fixture
+Agents, restarts the daemon so none is loaded, lets Workboard start and run a
+periodic refresh, and fails if the daemon log shows an `Agent resumed from
+persistence` for `clientId: plugin:paseo-workboard`. A control request from the
+script itself must log such a resume, so a host that words the line differently
+fails instead of passing silently. The fixture provider has no provider
+children, so children of an idle parent are covered only by unit tests, and the
+suite cannot archive an idle fixture end to end on the real clock because its
+Agents are always recent.
+
+For that reason the runner then restarts the daemon with
+`WORKBOARD_TEST_CLOCK_OFFSET_MS` set to 40 days and runs the suite again (only
+the end-to-end archive group runs in that mode) and, with `--ui`, the browser
+tests. The offset moves only Workboard's own clock, so an idle fixture counts as
+old, and it is honored only when the Paseo home is a temporary directory that
+holds the `.paseo-workboard-integration` marker; otherwise the real clock is
+used without any message. To run that group against your own marked test home,
+start its daemon with the variable set and export the same variable for
+`npm run test:integration`; never set it on a personal daemon.
+
 To also exercise the actual Paseo Web UI in headless Chromium:
 
 ```sh

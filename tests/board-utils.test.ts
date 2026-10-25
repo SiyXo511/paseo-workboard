@@ -7,8 +7,10 @@ import {
   type Card,
 } from "../shared/model";
 import {
+  boardNow,
   cardsForStage,
   attentionReasons,
+  childrenSkippedForIdle,
   groupDeleteReason,
   groupTasks,
   mappingPreview,
@@ -655,4 +657,37 @@ it("returns exactly the due candidates and proposed deadlines used by preview co
   expect(disabled.candidates.map(({ card }) => card.id)).toEqual(["canceled"]);
   expect(disabled).toMatchObject({ due: 1, dueDone: 0, dueCanceled: 1 });
   expect(mappingPreview([], settings, Date.now()).candidates).toEqual([]);
+});
+
+describe("children skipped for idle agents", () => {
+  const unlisted = (
+    recheckAt: string | null,
+    reason = "child-enumeration-unavailable",
+  ) =>
+    card({
+      conversationReason: reason as Card["conversationReason"],
+      recheckAt,
+      agents: [{ id: "a", title: "A", activity: "idle", archived: false }],
+    });
+  it("follows the server's scheduled-recheck state, not the agents' activity", () => {
+    expect(childrenSkippedForIdle(unlisted("2026-08-01T00:00:00.000Z"))).toBe(
+      true,
+    );
+    expect(childrenSkippedForIdle(unlisted(null))).toBe(false);
+    expect(
+      childrenSkippedForIdle(
+        unlisted("2026-08-01T00:00:00.000Z", "replay-timestamp"),
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("board clock", () => {
+  it("judges due dates by the server's clock, not the browser's alone", () => {
+    const real = Date.now();
+    expect(boardNow({})).toBeGreaterThanOrEqual(real);
+    expect(boardNow({ clockOffsetMs: 3_600_000 })).toBeGreaterThanOrEqual(
+      real + 3_600_000,
+    );
+  });
 });

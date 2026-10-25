@@ -9,7 +9,13 @@ import {
   type Board,
   type Card,
 } from "../shared/model";
-import { attentionReasons, hasNoAgents, shortDate } from "./board-utils";
+import {
+  attentionReasons,
+  boardNow,
+  childrenSkippedForIdle,
+  hasNoAgents,
+  shortDate,
+} from "./board-utils";
 import { strings } from "./strings";
 import { groupColor, supplementalColor } from "./colors";
 import { HintButton } from "./Hint";
@@ -102,7 +108,9 @@ export function TaskItem({
             ? t.conversationAtMost.replace("{date}", displayedDate)
             : displayedDate;
   const reason = card.conversationReason
-    ? t.conversationReasons[card.conversationReason]
+    ? childrenSkippedForIdle(card)
+      ? t.childrenNotListedIdle
+      : t.conversationReasons[card.conversationReason]
     : null;
   const terminal = isTerminalGroup(card.stage, board.settings.groups);
   const issue =
@@ -470,7 +478,9 @@ export function TaskItem({
   );
   if (presentation === "row") {
     const overdue =
-      terminal && card.dueAt && new Date(card.dueAt).getTime() < Date.now();
+      terminal &&
+      card.dueAt &&
+      new Date(card.dueAt).getTime() < boardNow(board);
     const projectSummary = (
       <Text
         numberOfLines={1}
@@ -831,13 +841,13 @@ export function TaskItem({
             styles.cardMeta,
             {
               color:
-                new Date(card.dueAt).getTime() < Date.now()
+                new Date(card.dueAt).getTime() < boardNow(board)
                   ? theme.colors.statusWarning
                   : theme.colors.foregroundMuted,
             },
           ]}
         >
-          {new Date(card.dueAt).getTime() < Date.now()
+          {new Date(card.dueAt).getTime() < boardNow(board)
             ? t.overdue
             : t.expires.replace("{date}", shortDate(card.dueAt, t.locale))}
         </Text>

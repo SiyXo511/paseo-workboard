@@ -483,6 +483,9 @@ export const activitySchema = z.enum([
   "attention",
   "error",
 ]);
+/** Running and waiting agents hold a provider process; everything else is at rest. */
+export const isActiveActivity = (activity: z.infer<typeof activitySchema>) =>
+  activity === "running" || activity === "waiting";
 export const pinStateSchema = z
   .enum(["none", "automatic", "manual"])
   .default("none");
@@ -509,6 +512,12 @@ export const cardSchema = taskSchema.extend({
   activity: activitySchema,
   pinState: pinStateSchema,
   dueAt: z.string().nullable(),
+  /**
+   * Computed, never stored. When an idle parent's skipped children are the only thing keeping
+   * this workspace's archive gate unknown, the recorded time at which it would be rechecked.
+   * It schedules a recheck and never authorizes an archive.
+   */
+  recheckAt: z.string().nullable().optional(),
   agents: z.array(
     z.object({
       id: z.string(),
@@ -526,6 +535,8 @@ export const boardSchema = z.object({
   connected: z.boolean(),
   error: z.string().nullable(),
   refreshedAt: z.string().nullable(),
+  /** The server clock's offset from real time: 0, except in the marked integration home. */
+  clockOffsetMs: z.number().optional(),
   settings: settingsSchema,
   cards: z.array(cardSchema),
   cardOrderByStage: cardOrderByStageSchema,

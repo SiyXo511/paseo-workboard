@@ -35,8 +35,25 @@ const attentionIssues = new Set([
   "directory-unavailable",
 ]);
 
+/** The time the server judges due dates by: the real clock, plus its test-only offset. */
+export function boardNow(board: Pick<Board, "clockOffsetMs">): number {
+  return Date.now() + (board.clockOffsetMs ?? 0);
+}
+
 export function hasNoAgents(card: Card): boolean {
   return card.workspaceId !== null && card.agents.length === 0;
+}
+
+/**
+ * Whether the card's provider children are unlisted only because an idle parent was left alone
+ * on purpose. The server decides that from the conversation evidence (a schedule exists only
+ * when nothing else keeps the gate unknown); the client does not infer it from agent activity.
+ */
+export function childrenSkippedForIdle(card: Card): boolean {
+  return (
+    card.conversationReason === "child-enumeration-unavailable" &&
+    card.recheckAt != null
+  );
 }
 
 export function attentionReasons(card: Card): string[] {
@@ -180,6 +197,8 @@ type ArchiveCandidate = {
   days: number;
   conversationAt: string;
   dueAt: string;
+  /** The time is only a scheduled recheck, not a bound on the conversation. */
+  scheduled: boolean;
 };
 
 export function mappingPreview(
@@ -203,7 +222,10 @@ export function mappingPreview(
     );
     if (stage !== card.stage) affected += 1;
     const kind = groupKind(stage, settings.groups);
-    const conversationAt = archiveGate(card);
+    // A scheduled idle recheck may archive right after the rule is enabled, so it belongs in
+    // the confirmation; the hint itself never authorizes anything.
+    const gate = archiveGate(card);
+    const conversationAt = gate ?? card.recheckAt ?? null;
     const days = archiveDelayFor(settings, kind);
     const dueAt = archiveDueAt(conversationAt, days);
     if (
@@ -215,7 +237,14 @@ export function mappingPreview(
       !card.binding &&
       isArchiveDue(kind, conversationAt, now, days)
     )
-      candidates.push({ card, kind, days, conversationAt, dueAt });
+      candidates.push({
+        card,
+        kind,
+        days,
+        conversationAt,
+        dueAt,
+        scheduled: gate === null,
+      });
   }
   return {
     affected,

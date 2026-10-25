@@ -190,6 +190,8 @@ const zh = {
   archiveCandidatesEmpty: "按新设置，目前没有到期任务。",
   archiveCandidateDue: "等待 {days} 天 · 到期时间：{date}",
   archiveCandidateExact: "最后一次已验证对话：{date}",
+  archiveCandidateScheduled:
+    "记录的活动时间已到复核时间；最后一次对话时间尚未验证。",
   archiveCandidateUpperBound:
     "最后对话不晚于：{date}（以已记录活动时间保守计算）",
   enableAutoArchive: "保存自动归档设置",
@@ -307,6 +309,8 @@ const zh = {
     "child-enumeration-unavailable": "无法枚举 provider 子 agent",
     "child-timeline-unreadable": "子 agent 时间线读取失败",
   },
+  childrenNotListedIdle:
+    "Agent 处于空闲状态，刷新时不会唤醒它来列出 provider 子 agent；归档前才会检查",
   archiveConfirmedByUser: "归档结果已由用户确认",
   mutationErrors: {
     "card-order-changed": "列内任务顺序或成员已改变，请刷新后重试。",
@@ -628,6 +632,8 @@ const en: typeof zh = {
   archiveCandidatesEmpty: "No tasks are currently due under the new settings.",
   archiveCandidateDue: "{days}-day delay · Due: {date}",
   archiveCandidateExact: "Last verified conversation: {date}",
+  archiveCandidateScheduled:
+    "Recorded activity is due for recheck; the last conversation time has not been verified.",
   archiveCandidateUpperBound:
     "Last conversation no later than: {date} (conservative recorded-activity bound)",
   enableAutoArchive: "Save automatic archive settings",
@@ -753,6 +759,8 @@ const en: typeof zh = {
     "child-timeline-unreadable":
       "A provider child's timeline could not be read",
   },
+  childrenNotListedIdle:
+    "The agent is idle, so a refresh does not wake it to list its provider children; they are checked before archive",
   archiveConfirmedByUser: "Archive outcome confirmed by user",
   mutationErrors: {
     "card-order-changed":
