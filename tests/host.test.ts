@@ -1166,3 +1166,83 @@ it.each(["create-delete", "provider", "snapshot", "subscription failure"])(
     }
   },
 );
+
+it("invalidates both workspaces when an Agent moves and scopes its removal to the destination", async () => {
+  const test = fixture({
+    settings: settingsSchema.parse({
+      archiveCanceledEnabled: true,
+      archiveCanceledAfterDays: 1,
+    }),
+  });
+  test.inventory.workspaces.push(
+    workspace("w1", undefined, ["task:canceled"]),
+    workspace("w2", undefined, ["task:canceled"]),
+    workspace("other", undefined, ["task:canceled"]),
+  );
+  const observers: SubscriptionObserver<unknown>[] = [];
+  let clock = test.now();
+  let board: Workboard;
+  const nativeAgents: Record<string, unknown>[] = [];
+  const native = providerHost(
+    nativeAgents,
+    { subagents: async () => [] } as unknown as PaseoCompat,
+    (id, agentsChanged) =>
+      agentsChanged ? board.agentsChanged(id) : board.changed(id),
+    observers,
+    undefined,
+    () => test.inventory.workspaces,
+  );
+  board = new Workboard(
+    { ...test.host, inventory: () => native.inventory() },
+    test.store,
+    () => clock,
+  );
+  const update = (payload: unknown) =>
+    observers[1].update({ type: "agent_update", payload } as Parameters<
+      SubscriptionObserver<unknown>["update"]
+    >[0]);
+  const bound = (id: string) =>
+    board.snapshot().cards.find((card) => card.workspaceId === id)!
+      .conversationGateAt;
+  try {
+    await board.start();
+    clock += 1000;
+    nativeAgents.push(parentAgent);
+    update({ kind: "upsert", agent: parentAgent });
+    await vi.waitFor(() =>
+      expect(
+        board.snapshot().cards.find((card) => card.workspaceId === "w1")
+          ?.agents,
+      ).toHaveLength(1),
+    );
+    clock += 1000;
+    nativeAgents[0] = { ...parentAgent, workspaceId: "w2" };
+    update({ kind: "upsert", agent: nativeAgents[0] });
+    const departedAt = new Date(clock).toISOString();
+    await vi.waitFor(() => {
+      expect(bound("w1")).toBe(departedAt);
+      expect(bound("w2")).not.toBe(new Date(test.now()).toISOString());
+    });
+    clock += 1000;
+    nativeAgents.length = 0;
+    update({ kind: "remove", agentId: parentAgent.id });
+    await vi.waitFor(() =>
+      expect(bound("w2")).toBe(new Date(clock).toISOString()),
+    );
+    expect(bound("w1")).toBe(departedAt);
+    expect(bound("w2")).toBe(new Date(clock).toISOString());
+    expect(bound("other")).toBe(new Date(test.now()).toISOString());
+    clock = Date.parse(departedAt) + 86400001;
+    await board.refresh();
+    expect(vi.mocked(test.host.archive).mock.calls.map(([id]) => id)).toEqual(
+      expect.arrayContaining(["w1", "other"]),
+    );
+    expect(test.host.archive).not.toHaveBeenCalledWith("w2");
+    clock += 1000;
+    await board.refresh();
+    expect(test.host.archive).toHaveBeenCalledWith("w2");
+  } finally {
+    board.dispose();
+    native.dispose();
+  }
+});

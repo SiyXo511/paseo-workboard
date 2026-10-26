@@ -87,7 +87,13 @@ export default function contribute(server: PluginServerContext) {
         agentsChanged ? board?.agentsChanged(id) : board?.changed(id),
       );
       const clock = workboardClock();
-      board = new Workboard(host, store, clock.now, undefined, clock.offsetMs);
+      board = new Workboard(
+        host,
+        store,
+        clock.now,
+        undefined,
+        () => clock.offsetMs,
+      );
       await board.start();
     } catch (failure) {
       const classified = classifyBootFailure(failure);
