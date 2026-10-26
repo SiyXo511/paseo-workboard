@@ -663,7 +663,9 @@ it("recovers a lost create response with the persisted idempotency key and no se
   }
 });
 it("preserves ordinary labels, observes native changes and rejects stale transitions", async () => {
-  const { board, inventory } = fixture();
+  const { board, inventory } = fixture({
+    settings: settingsSchema.parse({ exclusiveStatusLabels: false }),
+  });
   inventory.workspaces.push(
     workspace("w", undefined, ["customer", "task:todo"]),
   );
@@ -829,18 +831,11 @@ it("refuses a foreign host's persisted data without touching its workspaces", as
   }
 });
 
-it("resolves an externally added status label when exclusivity is enabled", async () => {
+it("resolves an externally added status label by default", async () => {
   const { board, host, inventory, store } = fixture();
   inventory.workspaces.push(workspace("w", "Task", ["customer", "task:todo"]));
   await board.start();
   try {
-    const view = board.snapshot();
-    await board.mutate({
-      action: "settings",
-      revision: view.revision,
-      expectedSettings: view.settings,
-      settings: { ...view.settings, exclusiveStatusLabels: true },
-    });
     inventory.workspaces[0].labels = ["customer", "task:todo", "task:done"];
     await board.refresh();
     expect(board.snapshot().cards[0]).toMatchObject({
@@ -910,8 +905,10 @@ it("keeps the conflict banner when the newest-wins sync fails", async () => {
     board.dispose();
   }
 });
-it("keeps default behavior unchanged when exclusivity is off", async () => {
-  const { board, inventory } = fixture();
+it("keeps conflicts manual when exclusivity is explicitly off", async () => {
+  const { board, inventory } = fixture({
+    settings: settingsSchema.parse({ exclusiveStatusLabels: false }),
+  });
   inventory.workspaces.push(workspace("w", "Task", ["customer", "task:todo"]));
   await board.start();
   try {
@@ -1078,7 +1075,9 @@ it("resolves a label added externally between binding and reconciliation", async
   }
 });
 it("resolves a standing conflict when exclusivity is enabled afterwards", async () => {
-  const { board, inventory } = fixture();
+  const { board, inventory } = fixture({
+    settings: settingsSchema.parse({ exclusiveStatusLabels: false }),
+  });
   inventory.workspaces.push(workspace("w", "Task", ["customer", "task:todo"]));
   await board.start();
   try {

@@ -159,7 +159,7 @@ it.each([
     "exclusive status labels",
     "workboard-exclusive-status-labels",
     "exclusiveStatusLabels",
-    true,
+    false,
   ],
 ] as const)(
   "persists %s when its switch changes and keeps it after reopening",

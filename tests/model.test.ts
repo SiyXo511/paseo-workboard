@@ -119,7 +119,11 @@ describe("task stages and conversation-based expiry", () => {
       archiveDoneEnabled: false,
       archiveCanceledEnabled: false,
     });
-    expect(settingsSchema.parse({}).exclusiveStatusLabels).toBe(false);
+    expect(settingsSchema.parse({}).exclusiveStatusLabels).toBe(true);
+    expect(
+      settingsSchema.parse({ exclusiveStatusLabels: false })
+        .exclusiveStatusLabels,
+    ).toBe(false);
     expect(
       settingsSchema.safeParse({
         groups: DEFAULT_GROUPS.map((group) =>

@@ -147,7 +147,7 @@ const preferences = {
   defaultStartGroup: stageSchema.nullable().default(null),
   defaultStartWorkGroup: stageSchema.nullable().default(null),
   pinInProgressWorkspaces: z.boolean().default(true),
-  exclusiveStatusLabels: z.boolean().default(false),
+  exclusiveStatusLabels: z.boolean().default(true),
 };
 export const settingsSchema = z.object({
   ...preferences,
