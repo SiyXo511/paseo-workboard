@@ -208,7 +208,11 @@ it("rejects settings edited in another window even when the task revision is cur
           action: "settings",
           revision: current.revision,
           expectedSettings: opened.settings,
-          settings: { ...opened.settings, autoArchive: true },
+          settings: {
+            ...opened.settings,
+            archiveDoneEnabled: true,
+            archiveCanceledEnabled: true,
+          },
         }),
       ),
     ).rejects.toThrow("Settings changed");
@@ -516,7 +520,11 @@ it("archives by custom group kind at the conversation boundary, independent of g
     shipped,
   ];
   const { host, store, inventory } = fixture({
-    settings: settingsSchema.parse({ groups, autoArchive: true }),
+    settings: settingsSchema.parse({
+      groups,
+      archiveDoneEnabled: true,
+      archiveCanceledEnabled: true,
+    }),
   });
   inventory.workspaces.push(
     workspace("old", "Shipped", [shipped.label]),

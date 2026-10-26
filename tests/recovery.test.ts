@@ -22,7 +22,10 @@ it.each(["uncertain", "external"] as const)(
         detail: "unknown",
       };
       const test = fixture({
-        settings: settingsSchema.parse({ autoArchive: true }),
+        settings: settingsSchema.parse({
+          archiveDoneEnabled: true,
+          archiveCanceledEnabled: true,
+        }),
         tasks: [
           {
             ...newTask("task", "Task", "2026-08-01T00:00:00Z"),
@@ -386,7 +389,10 @@ it("retains an unresolved archive if its original group was deleted", async () =
 
 it("keeps a restored task on the board when native archive removed the workspace but its response was lost", async () => {
   const test = fixture({
-    settings: settingsSchema.parse({ autoArchive: true }),
+    settings: settingsSchema.parse({
+      archiveDoneEnabled: true,
+      archiveCanceledEnabled: true,
+    }),
   });
   test.inventory.workspaces.push(workspace("old", "Old task", ["task:done"]));
   test.inventory.agents.push({

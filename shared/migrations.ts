@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   dataSchema,
+  DATA_SCHEMA_VERSION,
   DEFAULT_LABELS,
   DEFAULT_GROUPS,
   groupSchema,
@@ -25,7 +26,13 @@ const legacyGroups = legacyStages.map((kind) => ({
   name: null,
   label: DEFAULT_LABELS[kind],
 }));
-const preV8Settings = settingsSchema.omit({ defaultStartWorkGroup: true });
+// Legacy versions had a master gate and enabled both subordinate rules by default.
+const v8Settings = settingsSchema.extend({
+  autoArchive: z.boolean().default(false),
+  archiveDoneEnabled: z.boolean().default(true),
+  archiveCanceledEnabled: z.boolean().default(true),
+});
+const preV8Settings = v8Settings.omit({ defaultStartWorkGroup: true });
 const preV7Settings = preV8Settings
   .omit({
     archiveAfterDays: true,
@@ -184,8 +191,12 @@ function migrateV6(values: unknown) {
     tasks: previous.tasks.map((task) => ({
       ...task,
       mergedDrafts: [],
+      // v6 could clear seenWhileLive while retaining cached provider children.
       conversationAgents: task.conversationAgents.filter(
-        (entry) => entry.lastObservedAt !== null,
+        (entry) =>
+          entry.lastObservedAt !== null ||
+          entry.seenWhileLive ||
+          entry.id.includes("/provider/"),
       ),
     })),
   });
@@ -199,10 +210,30 @@ function migrateV7(values: unknown) {
       settings: preV8Settings.default(() => preV8Settings.parse({})),
     })
     .parse(values);
-  return dataSchema.parse({
+  return migrateV8({
     ...previous,
     schemaVersion: 8,
     cardOrderByStage: {},
+  });
+}
+
+function migrateV8(values: unknown) {
+  const previous = z
+    .object({
+      ...dataSchema.shape,
+      schemaVersion: z.literal(8).default(8),
+      settings: v8Settings.default(() => v8Settings.parse({})),
+    })
+    .parse(values);
+  const { autoArchive, ...settings } = previous.settings;
+  return dataSchema.parse({
+    ...previous,
+    schemaVersion: DATA_SCHEMA_VERSION,
+    settings: {
+      ...settings,
+      archiveDoneEnabled: autoArchive && settings.archiveDoneEnabled,
+      archiveCanceledEnabled: autoArchive && settings.archiveCanceledEnabled,
+    },
   });
 }
 
@@ -278,6 +309,8 @@ export class InvalidStorageDataError extends Error {
 }
 
 function migrateDataUnsafe(values: unknown, fromVersion: number) {
+  if (fromVersion === DATA_SCHEMA_VERSION) return dataSchema.parse(values);
+  if (fromVersion === 8) return migrateV8(values);
   if (fromVersion === 7) return migrateV7(values);
   if (fromVersion === 6) return migrateV6(values);
   if (fromVersion === 5) return migrateV5(values);

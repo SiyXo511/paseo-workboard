@@ -6,11 +6,13 @@ import {
   DEFAULT_LABELS,
   DEFAULT_GROUPS,
   resolveStage,
+  archiveDelayFor,
   archiveDueAt,
   archiveGate,
   conversationStatusFor,
   isArchiveDue,
   newTask,
+  newestConflictStage,
   settingsSchema,
 } from "../shared/model";
 
@@ -44,6 +46,35 @@ describe("task stages and conversation-based expiry", () => {
     expect(isArchiveDue("inbox", conversation, boundary + 1)).toBe(false);
     expect(isArchiveDue("conflict", conversation, boundary + 1)).toBe(false);
     expect(isArchiveDue("done", null, boundary + 1)).toBe(false);
+    expect(isArchiveDue("done", conversation, boundary + 1, null)).toBe(false);
+  });
+  it("uses the shared legacy delay as each terminal rule's fallback", () => {
+    const legacy = migrateData(
+      {
+        schemaVersion: 8,
+        settings: { autoArchive: true, archiveAfterDays: 14 },
+      },
+      8,
+    ).settings;
+    expect(legacy).toMatchObject({
+      archiveCanceledEnabled: true,
+      archiveDoneEnabled: true,
+      archiveCanceledAfterDays: null,
+      archiveDoneAfterDays: null,
+    });
+    expect(archiveDelayFor(legacy, "canceled")).toBe(14);
+    expect(archiveDelayFor(legacy, "done")).toBe(14);
+    expect(archiveDelayFor(legacy, "todo")).toBeNull();
+
+    const split = settingsSchema.parse({
+      archiveCanceledEnabled: true,
+      archiveAfterDays: 30,
+      archiveCanceledAfterDays: 7,
+      archiveDoneAfterDays: 90,
+      archiveDoneEnabled: false,
+    });
+    expect(archiveDelayFor(split, "canceled")).toBe(7);
+    expect(archiveDelayFor(split, "done")).toBeNull();
   });
   it("keeps one stored settings version for the schema and its registration", () => {
     expect(dataSchema.parse({}).schemaVersion).toBe(DATA_SCHEMA_VERSION);
@@ -84,7 +115,11 @@ describe("task stages and conversation-based expiry", () => {
     expect(conversationStatusFor("unknown")).toBe("unknown");
   });
   it("rejects ambiguous mappings and keeps autoarchive opt-in", () => {
-    expect(settingsSchema.parse({}).autoArchive).toBe(false);
+    expect(settingsSchema.parse({})).toMatchObject({
+      archiveDoneEnabled: false,
+      archiveCanceledEnabled: false,
+    });
+    expect(settingsSchema.parse({}).exclusiveStatusLabels).toBe(false);
     expect(
       settingsSchema.safeParse({
         groups: DEFAULT_GROUPS.map((group) =>
@@ -92,6 +127,28 @@ describe("task stages and conversation-based expiry", () => {
         ),
       }).success,
     ).toBe(false);
+  });
+  it("attributes a conflict to the one label that differs from the previous stage", () => {
+    const groups = settingsSchema.parse({}).groups;
+    expect(
+      newestConflictStage("todo", ["task:todo", "task:done"], groups),
+    ).toBe("done");
+    expect(
+      newestConflictStage("done", ["task:in-progress", "task:done"], groups),
+    ).toBe("in-progress");
+    expect(
+      newestConflictStage("todo", ["task:review", "task:done"], groups),
+    ).toBe(undefined);
+    expect(
+      newestConflictStage(
+        "todo",
+        ["task:todo", "task:review", "task:done"],
+        groups,
+      ),
+    ).toBe(undefined);
+    expect(
+      newestConflictStage("conflict" as never, ["task:todo"], groups),
+    ).toBe(undefined);
   });
   it("enables sidebar In progress pinning for older settings without changing other preferences", () => {
     const data = migrateData(
@@ -107,7 +164,6 @@ describe("task stages and conversation-based expiry", () => {
     );
     expect(data.settings).toEqual({
       ...settingsSchema.parse({}),
-      autoArchive: false,
       pinInProgressWorkspaces: true,
       groups: DEFAULT_GROUPS,
       groupOrder: [],

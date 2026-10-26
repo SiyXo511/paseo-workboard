@@ -1,10 +1,11 @@
 import { execFile } from "node:child_process";
 import { mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { DaemonClient } from "@getpaseo/client/internal/daemon-client";
+import { isolatedGitEnvironment } from "../git-environment";
+import { isTemporaryIntegrationHome } from "./temporary-home";
 import {
   defaultGroup,
   cardsForStage,
@@ -20,6 +21,10 @@ const pluginId = "paseo-workboard";
 const fixtureId = "workboard-fixture";
 const root = process.env.WORKBOARD_INTEGRATION_HOME;
 let home = "";
+// With the test-only clock offset the daemon judges time 40 days ahead, so the Agents these
+// tests create (always recent) are old enough to archive. That run executes only the
+// end-to-end archive group below; the main group assumes the real clock (see the README).
+const offsetRun = Boolean(process.env.WORKBOARD_TEST_CLOCK_OFFSET_MS);
 let client: DaemonClient;
 
 type Status = { home: string; listen: string; daemonVersion: string };
@@ -51,6 +56,7 @@ async function git(args: string[], cwd?: string): Promise<string> {
   const { stdout } = await run("git", args, {
     ...(cwd ? { cwd } : {}),
     encoding: "utf8",
+    env: isolatedGitEnvironment(path.join(home, "git-templates")),
   });
   return stdout.trim();
 }
@@ -101,14 +107,7 @@ beforeAll(async () => {
   if (!root)
     throw new Error("Set WORKBOARD_INTEGRATION_HOME to an isolated Paseo home");
   home = await realpath(root);
-  const temporaryRoots = await Promise.all(
-    [tmpdir(), "/tmp"].map((directory) => realpath(directory)),
-  );
-  if (
-    !temporaryRoots.some((directory) =>
-      home.startsWith(`${directory}${path.sep}`),
-    )
-  ) {
+  if (!(await isTemporaryIntegrationHome(home))) {
     throw new Error(
       "Integration home must be inside a system temporary directory",
     );
@@ -119,6 +118,7 @@ beforeAll(async () => {
     throw new Error("Integration marker is missing or invalid");
   if (!(await stat(home)).isDirectory())
     throw new Error("Integration home is not a directory");
+  await mkdir(path.join(home, "git-templates"), { recursive: true });
 
   const daemon = await status();
   if ((await realpath(daemon.home)) !== home)
@@ -158,7 +158,7 @@ afterAll(async () => {
   await client?.close();
 });
 
-describe("isolated Paseo workboard", () => {
+describe.skipIf(offsetRun)("isolated Paseo workboard", () => {
   test("persists custom groups, follows native labels and deletes only after tasks move out", async () => {
     const initial = await readyBoard();
     const stamp = Date.now();
@@ -333,7 +333,12 @@ describe("isolated Paseo workboard", () => {
       expect(colored.settings.pinInProgressWorkspaces).toBe(
         initial.settings.pinInProgressWorkspaces,
       );
-      expect(colored.settings.autoArchive).toBe(initial.settings.autoArchive);
+      expect(colored.settings.archiveDoneEnabled).toBe(
+        initial.settings.archiveDoneEnabled,
+      );
+      expect(colored.settings.archiveCanceledEnabled).toBe(
+        initial.settings.archiveCanceledEnabled,
+      );
       expect(await nativeLabels(workspaceId)).toEqual(labelsBeforeColor);
       const groupOrder = orderedGroups(colored.settings).map(
         (group) => group.id,
@@ -359,7 +364,12 @@ describe("isolated Paseo workboard", () => {
       expect(restarted.settings.pinInProgressWorkspaces).toBe(
         initial.settings.pinInProgressWorkspaces,
       );
-      expect(restarted.settings.autoArchive).toBe(initial.settings.autoArchive);
+      expect(restarted.settings.archiveDoneEnabled).toBe(
+        initial.settings.archiveDoneEnabled,
+      );
+      expect(restarted.settings.archiveCanceledEnabled).toBe(
+        initial.settings.archiveCanceledEnabled,
+      );
       expect(restarted.cards.find((card) => card.id === cardId)?.stage).toBe(
         first.id,
       );
@@ -831,7 +841,7 @@ describe("isolated Paseo workboard", () => {
     ).toEqual(expect.arrayContaining(["task:done", "ordinary-label"]));
   });
 
-  test("automatically archives an old idle fixture conversation without a real model", async () => {
+  test("answers an idle fixture conversation from recorded bounds and does not archive it early", async () => {
     const directory = path.join(
       home,
       "integration-archive",
@@ -874,21 +884,28 @@ describe("isolated Paseo workboard", () => {
       assigned: true,
     });
 
-    await updateSettings({ autoArchive: true });
-    const archived = await eventually(
+    await updateSettings({
+      archiveDoneEnabled: true,
+      archiveCanceledEnabled: true,
+    });
+    // The fixture replays 2025 history, but the Agent is idle and its record is fresh. A refresh
+    // does not read an idle Agent, so the card carries only the recorded bound with its gate
+    // unknown, and the workspace is not a recheck candidate for another month.
+    const board = await eventually(
       snapshot,
-      (board) =>
-        board.cards.some(
+      (current) =>
+        current.cards.some(
           (card) =>
             card.workspaceId === workspaceId &&
-            card.archived?.status === "archived",
+            card.conversationReason === "child-enumeration-unavailable",
         ),
-      "old fixture conversation was not archived",
+      "idle fixture conversation was not answered from recorded bounds",
     );
-    expect(
-      archived.cards.find((card) => card.workspaceId === workspaceId)?.archived
-        ?.status,
-    ).toBe("archived");
+    const card = board.cards.find((item) => item.workspaceId === workspaceId)!;
+    expect(card.conversationGateEvidence).toBe("unknown");
+    expect(card.conversationDisplayEvidence).not.toBe("exact");
+    expect(card.archived).toBeNull();
+    expect(card.dueAt).toBeNull();
   });
 
   test("persists column order through native storage and plugin reload, rejects stale CAS and resets activity order", async () => {
@@ -974,7 +991,7 @@ describe("isolated Paseo workboard", () => {
     );
   });
 
-  test("keeps an archived parent's readable old history out of the upper-bound archive gate", async () => {
+  test("preserves an archived parent's display time but blocks archiving when children cannot be listed", async () => {
     const directory = path.join(
       home,
       "integration-archived-parent",
@@ -1018,7 +1035,10 @@ describe("isolated Paseo workboard", () => {
       label: { name: "task:done", color: "emerald" },
       assigned: true,
     });
-    await updateSettings({ autoArchive: true });
+    await updateSettings({
+      archiveDoneEnabled: true,
+      archiveCanceledEnabled: true,
+    });
     const observed = await eventually(
       snapshot,
       (board) =>
@@ -1027,10 +1047,11 @@ describe("isolated Paseo workboard", () => {
             card.workspaceId === workspaceId &&
             card.conversationStatus === "known" &&
             card.conversationDisplayEvidence === "upper-bound" &&
-            card.conversationGateEvidence === "upper-bound" &&
-            card.conversationGateAt === recordedAt,
+            card.lastConversationAt === recordedAt &&
+            card.conversationGateEvidence === "unknown" &&
+            card.conversationGateAt === null,
         ),
-      "archived parent did not retain its recorded activity upper bound",
+      "archived parent did not retain its display time with an unknown archive gate",
     );
     const card = observed.cards.find(
       (item) => item.workspaceId === workspaceId,
@@ -1038,15 +1059,18 @@ describe("isolated Paseo workboard", () => {
     expect(card.conversationStatus).toBe("known");
     expect(card.conversationDisplayEvidence).toBe("upper-bound");
     expect(card.lastConversationAt).toBe(recordedAt);
-    expect(card.conversationGateEvidence).toBe("upper-bound");
-    expect(card.conversationGateAt).toBe(recordedAt);
+    expect(card.conversationGateEvidence).toBe("unknown");
+    expect(card.conversationGateAt).toBeNull();
     expect(card.conversationReason).toBe("child-enumeration-unavailable");
-    expect(Date.parse(card.dueAt!)).toBeGreaterThan(Date.now());
+    expect(card.dueAt).toBeNull();
     expect(card.archived).toBeNull();
   });
 
-  test("automatically archives a clean, upstreamed Paseo managed worktree", async () => {
-    await updateSettings({ autoArchive: false });
+  test("keeps a clean, upstreamed Paseo managed worktree with a recently active idle Agent", async () => {
+    await updateSettings({
+      archiveDoneEnabled: false,
+      archiveCanceledEnabled: false,
+    });
     const root = path.join(
       home,
       "integration-managed-worktree",
@@ -1057,6 +1081,15 @@ describe("isolated Paseo workboard", () => {
     await mkdir(root, { recursive: true });
     await git(["init", "--bare", remote]);
     await git(["init", "--initial-branch=main", seed]);
+    await git(
+      ["config", "core.hooksPath", path.join(home, "git-templates")],
+      seed,
+    );
+    const emptyConfig = path.join(home, "git-templates", "disabled-config");
+    await git(["config", "core.excludesFile", emptyConfig], seed);
+    await git(["config", "core.attributesFile", emptyConfig], seed);
+    await git(["config", "core.autocrlf", "false"], seed);
+    await git(["config", "commit.gpgsign", "false"], seed);
     await git(["config", "user.name", "Test"], seed);
     await git(["config", "user.email", "test@example.invalid"], seed);
     await writeFile(
@@ -1134,26 +1167,386 @@ describe("isolated Paseo workboard", () => {
       label: { name: "task:done", color: "emerald" },
       assigned: true,
     });
-    await updateSettings({ autoArchive: true });
-    const archived = await eventually(
+    await updateSettings({
+      archiveDoneEnabled: true,
+      archiveCanceledEnabled: true,
+    });
+    // The idle Agent is not read by a refresh, so the workspace is not due and nothing may
+    // archive it or remove its worktree early.
+    await eventually(
       snapshot,
       (board) =>
         board.cards.some(
           (card) =>
             card.workspaceId === workspace.id &&
-            card.archived?.status === "archived",
+            card.conversationReason === "child-enumeration-unavailable",
         ),
-      "managed worktree was not automatically archived",
+      "managed worktree was not answered from recorded bounds",
     );
-    expect(
-      archived.cards.find((card) => card.workspaceId === workspace.id)?.archived
-        ?.status,
-    ).toBe("archived");
+    await new Promise((resolve) => setTimeout(resolve, 3_000));
+    const card = (await snapshot()).cards.find(
+      (item) => item.workspaceId === workspace.id,
+    )!;
+    expect(card.archived).toBeNull();
     expect(
       (await client.fetchWorkspaces()).entries.some(
         (item) => item.id === workspace.id,
       ),
-    ).toBe(false);
-    expect(await exists(worktree)).toBe(false);
+    ).toBe(true);
+    expect(await exists(worktree)).toBe(true);
   });
 });
+
+describe.runIf(offsetRun)(
+  "isolated Paseo workboard with a clock offset",
+  () => {
+    test("archives an old idle fixture conversation after the recheck reads its history", async () => {
+      const directory = path.join(
+        home,
+        "integration-archive",
+        String(Date.now()),
+      );
+      await mkdir(directory, { recursive: true });
+      const workspace = await client.createWorkspace({
+        source: { kind: "directory", path: directory },
+        title: "integration old conversation",
+      });
+      const workspaceId = workspace.workspace?.id;
+      if (!workspaceId)
+        throw new Error("Paseo did not create the fixture workspace");
+      const agent = await client.createAgent({
+        provider: fixtureId,
+        model: "fixture-model",
+        cwd: directory,
+        workspaceId,
+      });
+      const agentId = agent.id;
+      // A fresh Agent starts with history:"skip". Refresh reopens the persisted,
+      // still-active provider session with history:"replay" without archiving it.
+      await client.refreshAgent(agentId);
+      const history = await client.fetchAgentTimeline(agentId, {
+        direction: "tail",
+        limit: 20,
+      });
+      expect(
+        history.entries
+          .filter(
+            (entry) =>
+              entry.item.type === "user_message" ||
+              entry.item.type === "assistant_message",
+          )
+          .map((entry) => entry.timestamp),
+      ).toEqual(["2025-01-02T03:04:05.000Z", "2025-01-02T03:04:06.000Z"]);
+      await client.setWorkspaceLabel({
+        workspaceId,
+        label: { name: "task:done", color: "emerald" },
+        assigned: true,
+      });
+
+      await updateSettings({
+        archiveDoneEnabled: true,
+        archiveCanceledEnabled: true,
+      });
+      const archived = await eventually(
+        snapshot,
+        (board) =>
+          board.cards.some(
+            (card) =>
+              card.workspaceId === workspaceId &&
+              card.archived?.status === "archived",
+          ),
+        "old fixture conversation was not archived",
+      );
+      expect(
+        archived.cards.find((card) => card.workspaceId === workspaceId)
+          ?.archived?.status,
+      ).toBe("archived");
+    });
+
+    test("archives a clean, upstreamed Paseo managed worktree after the recheck and removes it", async () => {
+      await updateSettings({
+        archiveDoneEnabled: false,
+        archiveCanceledEnabled: false,
+      });
+      const root = path.join(
+        home,
+        "integration-managed-worktree",
+        String(Date.now()),
+      );
+      const remote = path.join(root, "remote.git");
+      const seed = path.join(root, "seed");
+      await mkdir(root, { recursive: true });
+      await git(["init", "--bare", remote]);
+      await git(["init", "--initial-branch=main", seed]);
+      await git(
+        ["config", "core.hooksPath", path.join(home, "git-templates")],
+        seed,
+      );
+      const emptyConfig = path.join(home, "git-templates", "disabled-config");
+      await git(["config", "core.excludesFile", emptyConfig], seed);
+      await git(["config", "core.attributesFile", emptyConfig], seed);
+      await git(["config", "core.autocrlf", "false"], seed);
+      await git(["config", "commit.gpgsign", "false"], seed);
+      await git(["config", "user.name", "Test"], seed);
+      await git(["config", "user.email", "test@example.invalid"], seed);
+      await writeFile(
+        path.join(seed, "README.md"),
+        "workboard managed-worktree fixture\n",
+        "utf8",
+      );
+      await git(["add", "README.md"], seed);
+      await git(["commit", "-m", "seed fixture"], seed);
+      await git(["remote", "add", "origin", remote], seed);
+      await git(["push", "-u", "origin", "main"], seed);
+
+      const source = await client.createWorkspace({
+        source: { kind: "directory", path: seed },
+        title: "integration worktree source",
+      });
+      const projectId = source.workspace?.projectId;
+      if (!projectId)
+        throw new Error("Paseo did not register the seed project");
+      const slug = `workboard-managed-${Date.now()}`;
+      const created = await client.createPaseoWorktree({
+        cwd: seed,
+        projectId,
+        worktreeSlug: slug,
+        action: "branch-off",
+        refName: "main",
+      });
+      const workspace = created.workspace;
+      if (!workspace)
+        throw new Error(
+          `Paseo did not create the managed worktree: ${created.error ?? "unknown error"}`,
+        );
+      expect(workspace.workspaceKind).toBe("worktree");
+      expect(workspace.gitRuntime?.isPaseoOwnedWorktree).toBe(true);
+      const worktree = workspace.workspaceDirectory;
+      const branch = await git(["branch", "--show-current"], worktree);
+      expect(branch).not.toBe("");
+      await git(["push", "-u", "origin", branch], worktree);
+
+      const agent = await client.createAgent({
+        provider: fixtureId,
+        model: "fixture-model",
+        cwd: worktree,
+        workspaceId: workspace.id,
+      });
+      await client.refreshAgent(agent.id);
+      const history = await client.fetchAgentTimeline(agent.id, {
+        direction: "tail",
+        limit: 20,
+      });
+      expect(
+        history.entries
+          .filter(
+            (entry) =>
+              entry.item.type === "user_message" ||
+              entry.item.type === "assistant_message",
+          )
+          .map((entry) => entry.timestamp),
+      ).toEqual(["2025-01-02T03:04:05.000Z", "2025-01-02T03:04:06.000Z"]);
+      const fresh = await eventually(
+        () => client.fetchWorkspaces({ filter: { idPrefix: workspace.id } }),
+        (result) =>
+          result.entries.some(
+            (item) =>
+              item.id === workspace.id &&
+              item.gitRuntime?.isPaseoOwnedWorktree === true,
+          ),
+        "managed worktree ownership was not present in a fresh native inventory",
+      );
+      expect(
+        fresh.entries.find((item) => item.id === workspace.id)?.gitRuntime
+          ?.isPaseoOwnedWorktree,
+      ).toBe(true);
+      await client.setWorkspaceLabel({
+        workspaceId: workspace.id,
+        label: { name: "task:done", color: "emerald" },
+        assigned: true,
+      });
+      await updateSettings({
+        archiveDoneEnabled: true,
+        archiveCanceledEnabled: true,
+      });
+      const archived = await eventually(
+        snapshot,
+        (board) =>
+          board.cards.some(
+            (card) =>
+              card.workspaceId === workspace.id &&
+              card.archived?.status === "archived",
+          ),
+        "managed worktree was not automatically archived",
+      );
+      expect(
+        archived.cards.find((card) => card.workspaceId === workspace.id)
+          ?.archived?.status,
+      ).toBe("archived");
+      expect(
+        (await client.fetchWorkspaces()).entries.some(
+          (item) => item.id === workspace.id,
+        ),
+      ).toBe(false);
+      expect(await exists(worktree)).toBe(false);
+    });
+  },
+);
+
+describe.runIf(offsetRun && process.env.WORKBOARD_TEST_CLOCK_FILE === "1")(
+  "isolated empty-workspace clock",
+  () => {
+    test("real Agent create/delete resets the waiting period before automatic archive", async () => {
+      const day = 86400000;
+      const initialOffset = Number(process.env.WORKBOARD_TEST_CLOCK_OFFSET_MS);
+      const advance = async (elapsed: number) => {
+        await writeFile(
+          path.join(home, ".workboard-clock-offset-ms"),
+          String(initialOffset + elapsed),
+        );
+        await eventually(
+          snapshot,
+          (board) => board.clockOffsetMs === initialOffset + elapsed,
+          "clock offset did not reach the snapshot",
+        );
+      };
+      await updateSettings({
+        archiveDoneEnabled: false,
+        archiveCanceledEnabled: false,
+        archiveDoneAfterDays: 1,
+      });
+      const directory = path.join(
+        home,
+        "integration-empty",
+        String(Date.now()),
+      );
+      await mkdir(directory, { recursive: true });
+      const created = await client.createWorkspace({
+        source: { kind: "directory", path: directory },
+        title: "integration empty waiting period",
+      });
+      const workspaceId = created.workspace!.id;
+      await client.setWorkspaceLabel({
+        workspaceId,
+        label: { name: "task:done", color: "emerald" },
+        assigned: true,
+      });
+      const cardOf = (board: Board) =>
+        board.cards.find((card) => card.workspaceId === workspaceId);
+      const first = await eventually(
+        snapshot,
+        (board) => cardOf(board)?.conversationGateEvidence === "upper-bound",
+        "first empty observation was not recorded",
+      );
+      const firstBound = cardOf(first)!.conversationGateAt!;
+      const witnessDirectory = path.join(
+        home,
+        "integration-empty-witness",
+        String(Date.now()),
+      );
+      await mkdir(witnessDirectory, { recursive: true });
+      const witness = await client.createWorkspace({
+        source: { kind: "directory", path: witnessDirectory },
+        title: "integration due witness",
+      });
+      const witnessId = witness.workspace!.id;
+      await client.setWorkspaceLabel({
+        workspaceId: witnessId,
+        label: { name: "task:done", color: "emerald" },
+        assigned: true,
+      });
+      const withWitness = await eventually(
+        snapshot,
+        (board) =>
+          board.cards.some(
+            (card) =>
+              card.workspaceId === witnessId &&
+              card.conversationGateEvidence === "upper-bound",
+          ),
+        "empty witness was not observed",
+      );
+      // scan visits stored tasks in this order; the target precedes the due witness.
+      expect(
+        withWitness.cards.findIndex((card) => card.workspaceId === workspaceId),
+      ).toBeLessThan(
+        withWitness.cards.findIndex((card) => card.workspaceId === witnessId),
+      );
+      await advance(day / 2);
+      const agent = await client.createAgent({
+        provider: fixtureId,
+        model: "fixture-model",
+        cwd: directory,
+        workspaceId,
+      });
+      await client.sendAgentMessage(agent.id, "fixture hold turn");
+      await eventually(
+        snapshot,
+        (board) => {
+          const card = cardOf(board);
+          return (
+            card !== undefined &&
+            card.agents.some(
+              (item) => item.id === agent.id && item.activity === "running",
+            ) &&
+            (card.conversationGateEvidence === "upper-bound" ||
+              card.conversationGateEvidence === "exact")
+          );
+        },
+        "live fixture did not establish complete bounded evidence before deletion",
+      );
+      await client.deleteAgent(agent.id);
+      const reset = await eventually(
+        snapshot,
+        (board) => {
+          const card = cardOf(board);
+          return (
+            card?.agents.length === 0 &&
+            card.conversationGateEvidence === "upper-bound" &&
+            Date.parse(card.conversationGateAt!) > Date.parse(firstBound)
+          );
+        },
+        "real create/delete did not restart the empty waiting period",
+      );
+      const resetBound = cardOf(reset)!.conversationGateAt!;
+      // The old bound is due; the post-deletion bound still has half a day left.
+      await advance(day + 60000);
+      const enabled = await updateSettings({ archiveDoneEnabled: true });
+      const checked = await eventually(
+        snapshot,
+        (board) =>
+          board.cards.some(
+            (card) =>
+              card.workspaceId === witnessId &&
+              card.archived?.status === "archived",
+          ),
+        "due witness did not complete the automatic scan",
+      );
+      expect(cardOf(checked)?.archived).toBeNull();
+      expect(cardOf(checked)?.conversationGateAt).toBe(resetBound);
+      expect(
+        (await client.fetchWorkspaces()).entries.some(
+          (item) => item.id === workspaceId,
+        ),
+      ).toBe(true);
+      expect(
+        Date.now() + enabled.clockOffsetMs! - Date.parse(firstBound),
+      ).toBeGreaterThan(day);
+      expect(
+        Date.now() + enabled.clockOffsetMs! - Date.parse(resetBound),
+      ).toBeLessThan(day);
+      await advance(2 * day);
+      // A real workspace event triggers Workboard's normal refresh and archive scan.
+      await client.setWorkspaceLabel({
+        workspaceId,
+        label: { name: "integration-clock-advanced", color: "blue" },
+        assigned: true,
+      });
+      const archived = await eventually(
+        snapshot,
+        (board) => cardOf(board)?.archived?.status === "archived",
+        "empty workspace was not automatically archived after its new delay",
+      );
+      expect(cardOf(archived)?.conversationGateAt).toBe(resetBound);
+    });
+  },
+);
