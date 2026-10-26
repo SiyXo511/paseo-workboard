@@ -110,9 +110,7 @@ const hidden = (task: Task) =>
   task.archived?.status === "archived" || task.archived?.status === "external";
 /** Only a lastError-only idle Agent can be superseded by a newer user message. */
 function workspaceActivity(agents: readonly Agent[]): Card["activity"] {
-  const live = agents.filter(
-    (agent) => !agent.archivedAt && !agent.delegatedBy,
-  );
+  const live = agents.filter((agent) => !agent.archivedAt);
   const healthyTimes = live
     .filter((agent) => agent.activity !== "error")
     .map((agent) => Date.parse(agent.lastUserMessageAt ?? ""))
@@ -140,9 +138,7 @@ function workspaceActivity(agents: readonly Agent[]): Card["activity"] {
 }
 /** Cards stay workspace-scoped; provider children are not tabs, so they never count. */
 const liveTabs = (agents: readonly Agent[]) =>
-  agents.filter(
-    (agent) => !agent.archivedAt && !agent.parentAgentId && !agent.delegatedBy,
-  );
+  agents.filter((agent) => !agent.archivedAt && !agent.parentAgentId);
 const anyRunning = (agents: readonly Agent[]) =>
   liveTabs(agents).some(
     (agent) => agent.activity === "running" || agent.activity === "waiting",
