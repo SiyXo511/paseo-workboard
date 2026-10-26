@@ -38,6 +38,11 @@ it("pins by native task group, persists ownership, and unpins after leaving the 
     expect(host.setPinned).toHaveBeenCalledTimes(1);
     inventory.workspaces[0].labels = ["task:review"];
     await reopened.refresh();
+    expect(host.setPinned).toHaveBeenCalledTimes(1);
+    expect(inventory.workspaces[0].pinnedAt).toBeTruthy();
+
+    inventory.workspaces[0].labels = ["task:done"];
+    await reopened.refresh();
     expect(host.setPinned).toHaveBeenLastCalledWith("in-progress", false);
     expect(inventory.workspaces[0].pinnedAt).toBeNull();
   } finally {

@@ -96,6 +96,11 @@ export interface Inventory {
   agents: Agent[];
   projects: Board["projects"];
 }
+export interface TurnCompletion {
+  workspaceId: string;
+  agentId: string;
+  kind: "started" | "finished" | "read";
+}
 export interface Host {
   identity: { serverId: string; version: string };
   inventory(): Promise<Inventory>;
@@ -119,6 +124,8 @@ export interface Host {
     assigned: boolean,
   ): Promise<string[]>;
   setPinned(workspaceId: string, pinned: boolean): Promise<string | null>;
+  markRead(agentIds: readonly string[]): Promise<void>;
+  takeTurnCompletions(): readonly TurnCompletion[];
   create(
     source: Extract<StartInput["target"], { kind: "new" }>["source"],
     title: string,
@@ -186,6 +193,8 @@ export class PaseoHost implements Host {
   private workspaceUpdates = new Map<string, Workspace | null>();
   private agentUpdates = new Map<string, Agent | null>();
   private agentWorkspaces = new Map<string, string | undefined>();
+  private turnCompletions = new Map<string, TurnCompletion>();
+  private lastActivity = new Map<string, Card["activity"]>();
   /** Provider children per parent, keyed by the parent activity Paseo last reported. */
   private childRecords = new Map<string, ChildRecord>();
   private childRevision = 0;
@@ -239,14 +248,17 @@ export class PaseoHost implements Host {
         if (previousWorkspace && previousWorkspace !== change.agent.workspaceId)
           this.changed(previousWorkspace, true);
         this.agentWorkspaces.set(change.agent.id, change.agent.workspaceId);
-        this.agentUpdates.set(change.agent.id, {
+        const next = {
           ...change.agent,
           activity: activity(change.agent),
-        });
+        };
+        this.agentUpdates.set(change.agent.id, next);
+        this.trackCompletion(next);
         this.changed(change.agent.workspaceId, true);
       } else {
         this.invalidateChildren(change.agentId);
         this.childRecords.delete(change.agentId);
+        this.lastActivity.delete(change.agentId);
         this.agentUpdates.set(change.agentId, null);
         const workspaceId = this.agentWorkspaces.get(change.agentId);
         this.agentWorkspaces.delete(change.agentId);
@@ -263,6 +275,29 @@ export class PaseoHost implements Host {
       this.invalidateChildren(parentAgentId);
       this.changed(this.agentWorkspaces.get(parentAgentId), true);
     }
+  }
+  takeTurnCompletions(): readonly TurnCompletion[] {
+    const completed = [...this.turnCompletions.values()];
+    this.turnCompletions.clear();
+    return completed;
+  }
+  private trackCompletion(agent: Agent): void {
+    const previous = this.lastActivity.get(agent.id);
+    this.lastActivity.set(agent.id, agent.activity);
+    if (!previous || !agent.workspaceId || agent.archivedAt) return;
+    const finished =
+      (previous === "running" || previous === "waiting") &&
+      agent.activity === "attention";
+    const read = previous === "attention" && agent.activity === "idle";
+    const started =
+      (previous === "idle" || previous === "attention") &&
+      agent.activity === "running";
+    if (!finished && !read && !started) return;
+    const kind = started ? "started" : finished ? "finished" : "read";
+    this.turnCompletions.set(
+      `${agent.workspaceId}\u0000${agent.id}\u0000${kind}`,
+      { workspaceId: agent.workspaceId, agentId: agent.id, kind },
+    );
   }
   async inventory(): Promise<Inventory> {
     if (this.disposed) throw new Error("Workboard stopped");
@@ -345,6 +380,8 @@ export class PaseoHost implements Host {
     }
     for (const agent of [...agentMap.values()]) {
       this.agentWorkspaces.set(agent.id, agent.workspaceId);
+      if (!agent.parentAgentId && !this.lastActivity.has(agent.id))
+        this.lastActivity.set(agent.id, agent.activity);
       if (!agent.workspaceId || !workspaceMap.has(agent.workspaceId)) continue;
       const record = await this.childRecord(agent);
       const idle = !agent.archivedAt && !isActiveAgent(agent);
@@ -622,6 +659,14 @@ export class PaseoHost implements Host {
   }
   setPinned(id: string, pinned: boolean) {
     return this.compat.setPinned(id, pinned);
+  }
+  async markRead(agentIds: readonly string[]): Promise<void> {
+    if (!agentIds.length) return;
+    await this.compat.request(
+      "clear_agent_attention",
+      { agentId: [...agentIds] },
+      "clear_agent_attention_response",
+    );
   }
   async create(
     source: Extract<StartInput["target"], { kind: "new" }>["source"],

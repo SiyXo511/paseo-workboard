@@ -146,6 +146,8 @@ const preferences = {
   defaultDraftGroup: stageSchema.nullable().default(null),
   defaultStartGroup: stageSchema.nullable().default(null),
   defaultStartWorkGroup: stageSchema.nullable().default(null),
+  defaultReviewGroup: stageSchema.nullable().default(null),
+  autoMoveInProgressToReview: z.boolean().default(false),
   pinInProgressWorkspaces: z.boolean().default(true),
   exclusiveStatusLabels: z.boolean().default(true),
 };
@@ -192,6 +194,15 @@ export const defaultStartWorkGroup = (
     groups.find(
       (group) => group.id === configured && group.kind === "in-progress",
     ) ?? groups.find((group) => group.kind === "in-progress")
+  )?.id;
+export const defaultReviewGroup = (
+  groups: readonly Group[],
+  configured: Stage | null = null,
+): Stage | undefined =>
+  (
+    groups.find(
+      (group) => group.id === configured && group.kind === "review",
+    ) ?? groups.find((group) => group.kind === "review")
   )?.id;
 export const groupKind = (
   stage: Stage,

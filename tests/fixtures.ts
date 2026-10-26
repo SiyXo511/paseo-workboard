@@ -7,6 +7,7 @@ import type {
   ConversationEvidence,
   Host,
   Inventory,
+  TurnCompletion,
   Workspace,
 } from "../server/host";
 
@@ -55,6 +56,7 @@ export function fixture(initial: Partial<Data> = {}) {
   };
   const inventory: Inventory = { workspaces: [], agents: [], projects: [] };
   const created = new Map<string, string>();
+  const turnCompletions: TurnCompletion[] = [];
   let pinWrites = 0;
   const host: Host = {
     identity: { serverId: "fixture-host", version: "0.9.1" },
@@ -81,6 +83,11 @@ export function fixture(initial: Partial<Data> = {}) {
       w.pinnedAt = pinned ? new Date(now() + ++pinWrites).toISOString() : null;
       return w.pinnedAt;
     }),
+    markRead: vi.fn(async (ids) => {
+      for (const agent of inventory.agents)
+        if (ids.includes(agent.id)) agent.activity = "idle";
+    }),
+    takeTurnCompletions: () => turnCompletions.splice(0),
     archive: vi.fn(async (id) => {
       inventory.workspaces = inventory.workspaces.filter((w) => w.id !== id);
       return { archivedAt: new Date(now()).toISOString(), error: null };
@@ -91,7 +98,30 @@ export function fixture(initial: Partial<Data> = {}) {
   const now = () => Date.parse("2026-09-23T00:00:00Z");
   const store = new Store(backing);
   const board = new Workboard(host, store, now);
-  return { board, host, store, inventory, backing, now };
+  return {
+    board,
+    host,
+    store,
+    inventory,
+    backing,
+    now,
+    completeTurn(
+      workspaceId: string,
+      agentId?: string,
+      kind: TurnCompletion["kind"] = "finished",
+    ) {
+      const chosen =
+        agentId ??
+        inventory.agents
+          .filter(
+            (agent) => agent.workspaceId === workspaceId && !agent.archivedAt,
+          )
+          .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))[0]
+          ?.id;
+      if (!chosen) throw new Error(`No Agent in workspace ${workspaceId}`);
+      turnCompletions.push({ workspaceId, agentId: chosen, kind });
+    },
+  };
 }
 export function workspace(
   id: string,

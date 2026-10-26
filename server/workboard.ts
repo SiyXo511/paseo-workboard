@@ -7,6 +7,7 @@ import {
   cardsForStage,
   conversationStatusFor,
   defaultGroup,
+  defaultReviewGroup,
   defaultWorkspaceGroup,
   defaultStartWorkGroup,
   groupKind,
@@ -135,6 +136,15 @@ function workspaceActivity(agents: readonly Agent[]): Card["activity"] {
     ) ?? "idle"
   );
 }
+/** Cards stay workspace-scoped; provider children are not tabs, so they never count. */
+const liveTabs = (agents: readonly Agent[]) =>
+  agents.filter((agent) => !agent.archivedAt && !agent.parentAgentId);
+const anyRunning = (agents: readonly Agent[]) =>
+  liveTabs(agents).some(
+    (agent) => agent.activity === "running" || agent.activity === "waiting",
+  );
+const anyUnread = (agents: readonly Agent[]) =>
+  liveTabs(agents).some((agent) => agent.activity === "attention");
 
 function projectChangeRequest(workspace?: Workspace): Card["changeRequest"] {
   const runtime = workspace?.githubRuntime;
@@ -187,6 +197,9 @@ export class Workboard {
   /** First trustworthy empty inventory in this process, never a task edit timestamp. */
   private emptySince = new Map<string, string>();
   private emptyRevision = 0;
+  private pendingReviewTurns = new Set<string>();
+  private pendingReadTurns = new Set<string>();
+  private pendingStartTurns = new Set<string>();
   private archiveDeferrals = new Map<
     string,
     {
@@ -250,6 +263,10 @@ export class Workboard {
       for (const task of bindings)
         this.bindingInFlight.delete(task.binding!.operationId);
       await this.reconcile();
+      this.queueCompletions();
+      await this.autoStartRunningTurns();
+      await this.autoReviewCompletedTurns();
+      await this.autoReturnReadTurns();
       await this.scan();
     });
     if (!this.stopped)
@@ -279,6 +296,10 @@ export class Workboard {
       try {
         if (!this.connected) await this.load();
         await this.reconcile(scope);
+        this.queueCompletions();
+        await this.autoStartRunningTurns();
+        await this.autoReviewCompletedTurns();
+        await this.autoReturnReadTurns();
         await this.scan(scope);
       } catch (error) {
         this.connected = false;
@@ -976,17 +997,18 @@ export class Workboard {
       !this.stopped && connection === this.connectionGeneration;
     const wantsPin = (workspace: Workspace) => {
       const settings = this.store.current.settings;
+      const kind = groupKind(
+        resolveStage(
+          workspace.labels,
+          settings.groups,
+          settings.defaultStartGroup,
+        ),
+        settings.groups,
+      );
       return (
         settings.pinInProgressWorkspaces &&
         !workspace.archivingAt &&
-        groupKind(
-          resolveStage(
-            workspace.labels,
-            settings.groups,
-            settings.defaultStartGroup,
-          ),
-          settings.groups,
-        ) === "in-progress"
+        (kind === "in-progress" || kind === "review")
       );
     };
     for (const listed of inventory.workspaces) {
@@ -1140,7 +1162,8 @@ export class Workboard {
               previous.settings.groups,
               next.defaultStartGroup,
             ) ||
-          group.id === next.defaultStartWorkGroup
+          group.id === next.defaultStartWorkGroup ||
+          group.id === next.defaultReviewGroup
         )
           throw new Error("group-default-in-use");
       }
@@ -1157,6 +1180,18 @@ export class Workboard {
       )
         throw new Error("group-default-in-use");
       throw new Error("group-default-start-work-invalid");
+    }
+    if (
+      next.defaultReviewGroup &&
+      groupKind(next.defaultReviewGroup, next.groups) !== "review"
+    ) {
+      if (
+        next.defaultReviewGroup === previous.settings.defaultReviewGroup &&
+        groupKind(next.defaultReviewGroup, previous.settings.groups) ===
+          "review"
+      )
+        throw new Error("group-default-in-use");
+      throw new Error("group-default-review-invalid");
     }
     let cleared: string[] = [];
     await this.store.update((data) => {
@@ -1453,6 +1488,18 @@ export class Workboard {
                 detail: "Draft archived; no native workspace",
               };
             });
+          } else if (input.action === "mark-read") {
+            if (!task.workspaceId)
+              throw new Error("Task has no workspace to read");
+            const unread = this.inventory.agents.filter(
+              (agent) =>
+                agent.workspaceId === task.workspaceId &&
+                !agent.archivedAt &&
+                agent.activity === "attention",
+            );
+            await this.host.markRead(unread.map((agent) => agent.id));
+            await this.reconcile();
+            this.changed();
           } else if (input.action === "detach-draft") {
             await this.store.update((data) => {
               const current = data.tasks.find((t) => t.id === task.id)!;
@@ -1721,6 +1768,249 @@ export class Workboard {
       const task = data.tasks.find((t) => t.id === id);
       if (task) task.issue = issue;
     });
+  }
+  private queueCompletions(): void {
+    for (const completion of this.host.takeTurnCompletions()) {
+      const pending = {
+        started: this.pendingStartTurns,
+        finished: this.pendingReviewTurns,
+        read: this.pendingReadTurns,
+      }[completion.kind];
+      pending.add(completion.workspaceId);
+    }
+  }
+  private async autoStartRunningTurns(): Promise<void> {
+    const settings = this.store.current.settings;
+    if (!settings.autoMoveInProgressToReview) {
+      this.pendingStartTurns.clear();
+      return;
+    }
+    const target = defaultStartWorkGroup(
+      settings.groups,
+      settings.defaultStartWorkGroup,
+    );
+    if (!target) {
+      this.pendingStartTurns.clear();
+      return;
+    }
+    const candidates = new Set(this.pendingStartTurns);
+    for (const task of this.store.current.tasks) {
+      if (
+        !task.workspaceId ||
+        task.archived ||
+        task.binding ||
+        groupKind(task.lastStage, settings.groups) !== "todo"
+      )
+        continue;
+      const agents = this.inventory.agents.filter(
+        (agent) => agent.workspaceId === task.workspaceId && !agent.archivedAt,
+      );
+      if (anyRunning(agents)) candidates.add(task.workspaceId);
+    }
+    if (!candidates.size) return;
+    for (const workspaceId of candidates) {
+      const workspace = this.inventory.workspaces.find(
+        (candidate) => candidate.id === workspaceId,
+      );
+      const task = this.store.current.tasks.find(
+        (candidate) => candidate.workspaceId === workspaceId,
+      );
+      if (
+        !workspace ||
+        !task ||
+        workspace.archivingAt ||
+        task.archived ||
+        task.binding ||
+        task.issue === "labels-conflict"
+      ) {
+        this.pendingStartTurns.delete(workspaceId);
+        continue;
+      }
+      const stage = resolveStage(
+        workspace.labels,
+        settings.groups,
+        settings.defaultStartGroup,
+      );
+      if (groupKind(stage, settings.groups) !== "todo") {
+        this.pendingStartTurns.delete(workspaceId);
+        continue;
+      }
+      const agents = this.inventory.agents.filter(
+        (agent) => agent.workspaceId === workspaceId && !agent.archivedAt,
+      );
+      if (!anyRunning(agents)) {
+        this.pendingStartTurns.delete(workspaceId);
+        continue;
+      }
+      try {
+        const next = await this.transition(
+          workspaceId,
+          target,
+          statusLabels(workspace.labels, settings.groups),
+        );
+        this.inventory.workspaces = this.inventory.workspaces.map(
+          (candidate) => (candidate.id === workspaceId ? next : candidate),
+        );
+        await this.store.update((data) => {
+          const current = data.tasks.find(
+            (candidate) => candidate.id === task.id,
+          );
+          if (!current) return;
+          current.lastStage = target;
+          current.updatedAt = this.stamp(current.updatedAt);
+        });
+        this.changed(workspaceId);
+      } catch {
+        await this.issue(task.id, "auto-review-failed");
+      }
+      this.pendingStartTurns.delete(workspaceId);
+    }
+  }
+  private async autoReviewCompletedTurns(): Promise<void> {
+    const settings = this.store.current.settings;
+    if (!this.pendingReviewTurns.size) return;
+    if (!settings.autoMoveInProgressToReview) {
+      this.pendingReviewTurns.clear();
+      return;
+    }
+    const target = defaultReviewGroup(
+      settings.groups,
+      settings.defaultReviewGroup,
+    );
+    if (!target) {
+      this.pendingReviewTurns.clear();
+      return;
+    }
+    for (const workspaceId of [...this.pendingReviewTurns]) {
+      const workspace = this.inventory.workspaces.find(
+        (candidate) => candidate.id === workspaceId,
+      );
+      const task = this.store.current.tasks.find(
+        (candidate) => candidate.workspaceId === workspaceId,
+      );
+      if (
+        !workspace ||
+        !task ||
+        workspace.archivingAt ||
+        task.archived ||
+        task.binding ||
+        task.issue === "labels-conflict"
+      ) {
+        this.pendingReviewTurns.delete(workspaceId);
+        continue;
+      }
+      const stage = resolveStage(
+        workspace.labels,
+        settings.groups,
+        settings.defaultStartGroup,
+      );
+      if (groupKind(stage, settings.groups) !== "in-progress") {
+        this.pendingReviewTurns.delete(workspaceId);
+        continue;
+      }
+      const agents = this.inventory.agents.filter(
+        (agent) => agent.workspaceId === workspaceId && !agent.archivedAt,
+      );
+      if (agents.length === 0) {
+        this.pendingReviewTurns.delete(workspaceId);
+        continue;
+      }
+      if (anyRunning(agents)) continue;
+      if (!anyUnread(agents)) {
+        this.pendingReviewTurns.delete(workspaceId);
+        continue;
+      }
+      try {
+        const next = await this.transition(
+          workspaceId,
+          target,
+          statusLabels(workspace.labels, settings.groups),
+        );
+        this.inventory.workspaces = this.inventory.workspaces.map(
+          (candidate) => (candidate.id === workspaceId ? next : candidate),
+        );
+        await this.store.update((data) => {
+          const current = data.tasks.find(
+            (candidate) => candidate.id === task.id,
+          );
+          if (!current) return;
+          current.lastStage = target;
+          current.updatedAt = this.stamp(current.updatedAt);
+          if (current.issue === "auto-review-failed") current.issue = null;
+        });
+        this.changed(workspaceId);
+      } catch {
+        await this.issue(task.id, "auto-review-failed");
+      }
+      this.pendingReviewTurns.delete(workspaceId);
+    }
+  }
+  private async autoReturnReadTurns(): Promise<void> {
+    const settings = this.store.current.settings;
+    if (!this.pendingReadTurns.size) return;
+    if (!settings.autoMoveInProgressToReview) {
+      this.pendingReadTurns.clear();
+      return;
+    }
+    const target = defaultGroup(settings.groups, settings.defaultDraftGroup);
+    for (const workspaceId of [...this.pendingReadTurns]) {
+      const workspace = this.inventory.workspaces.find(
+        (candidate) => candidate.id === workspaceId,
+      );
+      const task = this.store.current.tasks.find(
+        (candidate) => candidate.workspaceId === workspaceId,
+      );
+      if (
+        !workspace ||
+        !task ||
+        workspace.archivingAt ||
+        task.archived ||
+        task.binding
+      ) {
+        this.pendingReadTurns.delete(workspaceId);
+        continue;
+      }
+      const stage = resolveStage(
+        workspace.labels,
+        settings.groups,
+        settings.defaultStartGroup,
+      );
+      if (groupKind(stage, settings.groups) !== "review") {
+        this.pendingReadTurns.delete(workspaceId);
+        continue;
+      }
+      const agents = this.inventory.agents.filter(
+        (agent) => agent.workspaceId === workspaceId && !agent.archivedAt,
+      );
+      if (anyRunning(agents)) continue;
+      if (anyUnread(agents)) {
+        this.pendingReadTurns.delete(workspaceId);
+        continue;
+      }
+      try {
+        const next = await this.transition(
+          workspaceId,
+          target,
+          statusLabels(workspace.labels, settings.groups),
+        );
+        this.inventory.workspaces = this.inventory.workspaces.map(
+          (candidate) => (candidate.id === workspaceId ? next : candidate),
+        );
+        await this.store.update((data) => {
+          const current = data.tasks.find(
+            (candidate) => candidate.id === task.id,
+          );
+          if (!current) return;
+          current.lastStage = target;
+          current.updatedAt = this.stamp(current.updatedAt);
+          if (current.issue === "auto-read-failed") current.issue = null;
+        });
+        this.changed(workspaceId);
+      } catch {
+        await this.issue(task.id, "auto-read-failed");
+      }
+      this.pendingReadTurns.delete(workspaceId);
+    }
   }
   private archiveFingerprint(
     workspace: Workspace | undefined,

@@ -131,6 +131,7 @@ const zh = {
   start: "开始工作",
   startHint: "选择项目并创建或关联 workspace。",
   status: "状态",
+  markRead: "已读",
   create: "创建草稿",
   update: "保存修改",
   titleField: "标题",
@@ -200,6 +201,9 @@ const zh = {
   pinInProgressWorkspaces: "进行中任务在 Paseo 侧边栏自动置顶",
   pinInProgressHint:
     "按“进行中”分组判断；离开该分组时仅取消插件添加的置顶，保留你手动置顶的 workspace。",
+  autoMoveInProgressToReview: "按未读状态自动流转任务",
+  autoMoveInProgressToReviewHint:
+    "任一标签开始运行时，待开始任务进入进行中；结束且留下未读时进入待验收；未读全部看过后回到待开始。",
   exclusiveStatusLabels: "状态标签互斥（新标签替换旧标签）",
   exclusiveStatusHint:
     "任务在外部获得新的状态标签时，自动移除上一次的状态标签，只保留最新选择的分组；仅作用于下方分组配置的标签，其他标签不受影响。无法判断哪个标签更新时，仍会显示标签冲突提示。",
@@ -297,6 +301,8 @@ const zh = {
     "native-archive-unknown": "归档结果待人工核实",
     "changed-during-check": "检查期间状态已变化",
     "label-sync-incomplete": "标签同步未完成",
+    "auto-review-failed": "自动移入待验收失败，请检查 workspace 标签",
+    "auto-read-failed": "自动移回待开始失败，请检查 workspace 标签",
     "workspace-unavailable": "workspace 不可用或正在归档",
     "archive-restored-workspace-unavailable":
       "任务已放回看板，但 workspace 不在宿主活跃清单中；请核实原生状态",
@@ -312,6 +318,10 @@ const zh = {
     "Agent 处于空闲状态，刷新时不会唤醒它来列出 provider 子 agent；归档前才会检查",
   archiveConfirmedByUser: "归档结果已由用户确认",
   mutationErrors: {
+    "group-default-review-invalid":
+      "自动移入默认分组只能选择现有的待验收类型组，请更换默认分组。",
+    "Task has no workspace to read":
+      "这个任务没有关联 workspace，无法标记已读。",
     "card-order-changed": "列内任务顺序或成员已改变，请刷新后重试。",
     "card-order-invalid":
       "排序无效；只能移动当前任务并保留其它任务的相对顺序。",
@@ -570,6 +580,7 @@ const en: typeof zh = {
   start: "Start work",
   startHint: "Choose a project and create or link a workspace.",
   status: "Status",
+  markRead: "Mark read",
   create: "Create draft",
   update: "Save changes",
   titleField: "Title",
@@ -642,6 +653,10 @@ const en: typeof zh = {
   pinInProgressWorkspaces: "Pin in-progress tasks in the Paseo sidebar",
   pinInProgressHint:
     "Use the In progress group. Leaving it removes only the pin added by this plugin; manually pinned workspaces stay pinned.",
+  autoMoveInProgressToReview:
+    "Move tasks between To do, In progress, and Review by unread state",
+  autoMoveInProgressToReviewHint:
+    "A running tab moves a To do task to In progress; a finish with unread output moves it to Review; reading all output returns it to To do.",
   exclusiveStatusLabels: "Exclusive status labels (newest replaces old)",
   exclusiveStatusHint:
     "When a task gains a new status label outside Workboard, remove the previous status label and keep only the latest group. Only labels configured as groups below are affected; ordinary labels are untouched. Conflicts whose newest label cannot be determined still raise the banner.",
@@ -745,6 +760,10 @@ const en: typeof zh = {
     "native-archive-unknown": "Archive result needs manual verification",
     "changed-during-check": "State changed during the check",
     "label-sync-incomplete": "Label sync is incomplete",
+    "auto-review-failed":
+      "Automatic Review failed; verify the workspace labels",
+    "auto-read-failed":
+      "Automatic return to To do failed; verify the workspace labels",
     "workspace-unavailable": "Workspace is unavailable or archiving",
     "archive-restored-workspace-unavailable":
       "Task restored to board, but the workspace is absent from the host active list; verify its native state",
@@ -762,6 +781,10 @@ const en: typeof zh = {
     "The agent is idle, so a refresh does not wake it to list its provider children; they are checked before archive",
   archiveConfirmedByUser: "Archive outcome confirmed by user",
   mutationErrors: {
+    "group-default-review-invalid":
+      "Choose an existing Review group for automatic Review.",
+    "Task has no workspace to read":
+      "This task has no workspace to mark as read.",
     "card-order-changed":
       "Column order or membership changed. Refresh and retry.",
     "card-order-invalid":
