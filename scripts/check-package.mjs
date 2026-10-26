@@ -40,14 +40,37 @@ const expected = [
   "LICENSE",
   "README.md",
   "README.zh-CN.md",
-  "CHANGELOG.md",
-  "CHANGELOG.zh-CN.md",
+  "OVERVIEW.md",
+  "OVERVIEW.zh-CN.md",
+  "images/icon.png",
+  ...["en", "zh-CN"].flatMap((language) => [
+    ...["workboard", "list", "filters", "settings"].map(
+      (name) => `images/${name}-${language}.png`,
+    ),
+    ...["views-filter", "move-undo"].map(
+      (name) => `images/${name}-${language}.gif`,
+    ),
+  ]),
   ...["client", "server", "shared"].flatMap((directory) =>
     readdirSync(directory, { recursive: true })
       .filter((file) => /\.tsx?$/.test(file))
       .map((file) => `${directory}/${file.replaceAll("\\", "/")}`),
   ),
 ].sort();
+assert.equal(manifest.icon, "images/icon.png");
+assert.ok(manifest.media.length > 0);
+for (const asset of [manifest.icon, ...manifest.media]) {
+  assert.ok(expected.includes(asset), `Unapproved listing asset: ${asset}`);
+  const bytes = readFileSync(asset);
+  if (asset.endsWith(".png")) {
+    assert.equal(bytes.subarray(0, 8).toString("hex"), "89504e470d0a1a0a");
+  } else {
+    assert.match(bytes.subarray(0, 6).toString(), /^GIF8[79]a$/);
+  }
+}
+const icon = readFileSync(manifest.icon);
+assert.equal(icon.readUInt32BE(16), 512);
+assert.equal(icon.readUInt32BE(20), 512);
 assert.deepEqual(
   packed.files.map((file) => file.path).sort(),
   expected,

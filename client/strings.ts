@@ -147,6 +147,7 @@ const zh = {
   noWorkspace: "草稿 · 未创建 workspace",
   noConversation: "尚无对话",
   unknownConversation: "对话时间待核实",
+  noAgents: "没有 Agent",
   conversationAtLeast: "不早于 {date}",
   conversationAtMost: "不晚于 {date}",
   expires: "将于 {date} 归档",
@@ -171,9 +172,12 @@ const zh = {
   autoArchive: "自动归档",
   autoArchiveMigrationPaused:
     "升级时补建了已废弃分组，其标签可能匹配已有 workspace。自动归档已关闭，请核对到期任务后重新开启；存在到期任务时会先要求确认。",
-  archiveAfterDays: "自动归档等待天数",
-  archiveAfterDaysHint: "输入 1–365 的整数，保存后生效。",
-  archiveAfterDaysInvalid: "请输入 1–365 的整数。",
+  archiveCanceled: "自动归档已废弃任务",
+  archiveDone: "自动归档已完成任务",
+  archiveCanceledAfterDays: "已废弃任务等待天数",
+  archiveDoneAfterDays: "已完成任务等待天数",
+  archiveDaysHint: "输入 1–365 的整数，保存后生效。",
+  archiveDaysInvalid: "请输入 1–365 的整数。",
   defaultDraftGroupSetting: "新草稿默认分组",
   defaultStartGroupSetting: "未标记 workspace 默认分组",
   defaultStartWorkGroupSetting: "开始工作默认分组（进行中）",
@@ -181,14 +185,33 @@ const zh = {
   detachDraft: "还原合并草稿",
   detachDraftConfirm:
     "将“{name}”还原为独立草稿，并从此任务备注中移除合并时追加的内容？",
-  autoArchiveHint: "完成或废弃且最后对话超过 {days} 天后，自动归档 workspace。",
-  enableAutoArchive: "开启自动归档",
+  archiveRuleHint: "最后对话超过 {days} 天且安全检查通过后归档。",
+  archiveCandidates: "待归档任务",
+  archiveCandidatesEmpty: "按新设置，目前没有到期任务。",
+  archiveCandidateDue: "等待 {days} 天 · 到期时间：{date}",
+  archiveCandidateExact: "最后一次已验证对话：{date}",
+  archiveCandidateScheduled:
+    "记录的活动时间已到复核时间；最后一次对话时间尚未验证。",
+  archiveCandidateUpperBound:
+    "最后对话不晚于：{date}（以已记录活动时间保守计算）",
+  enableAutoArchive: "保存自动归档设置",
   enableAutoArchiveConfirm:
-    "当前有 {count} 个任务已到期。开启后会在安全检查通过时自动归档对应 workspace，可能停止 Agent 和 terminal，并移除托管 worktree。",
+    "按新设置有 {count} 个任务已到期（已废弃 {canceled} 个，已完成 {done} 个）。保存后会在安全检查通过时自动归档对应 workspace，可能停止 Agent 和 terminal，并移除托管 worktree。",
   enable: "开启",
   pinInProgressWorkspaces: "进行中任务在 Paseo 侧边栏自动置顶",
   pinInProgressHint:
     "按“进行中”分组判断；离开该分组时仅取消插件添加的置顶，保留你手动置顶的 workspace。",
+  exclusiveStatusLabels: "状态标签互斥（新标签替换旧标签）",
+  exclusiveStatusHint:
+    "任务在外部获得新的状态标签时，自动移除上一次的状态标签，只保留最新选择的分组；仅作用于下方分组配置的标签，其他标签不受影响。无法判断哪个标签更新时，仍会显示标签冲突提示。",
+  dateFilter: "日期",
+  dateRanges: {
+    any: "不限制",
+    today: "今天",
+    "3days": "3 天内",
+    week: "本周",
+    month: "当月",
+  },
   settingsTitle: "设置",
   generalSettings: "通用",
   groups: "分组",
@@ -224,9 +247,9 @@ const zh = {
     "in-progress":
       "仅在开启“进行中任务在 Paseo 侧边栏自动置顶”时自动置顶；离开分组时仅取消插件添加的置顶。",
     review: "等待人工验收；Agent 结束不会把任务自动标为完成。",
-    done: "开启自动归档后，最后对话超过 {days} 天且安全检查通过才归档 workspace。",
+    done: "仅当“自动归档已完成任务”已启用、等待期限已到且安全检查通过时，才会归档 workspace。",
     canceled:
-      "开启自动归档后，最后对话超过 {days} 天且安全检查通过才归档 workspace；草稿可手动归档。",
+      "仅当“自动归档已废弃任务”已启用、等待期限已到且安全检查通过时，才会归档 workspace；草稿可手动归档。",
   },
   groupTasks: "{count} 个任务",
   defaultGroup: "默认接收草稿",
@@ -241,6 +264,8 @@ const zh = {
   groupInvalid: "请填写有效的分组名称和标签。",
   noStartGroup: "请先在设置中添加一个进行中类型的分组。",
   duePreview: "按当前映射，有 {count} 个已到期任务会在下次检查时处理。",
+  duePreviewBreakdown:
+    "按当前规则，已到期：已废弃 {canceled} 个，已完成 {done} 个。",
   mappingPreview: "修改映射会影响 {count} 个已绑定任务。",
   activity: {
     idle: "空闲",
@@ -284,6 +309,8 @@ const zh = {
     "child-enumeration-unavailable": "无法枚举 provider 子 agent",
     "child-timeline-unreadable": "子 agent 时间线读取失败",
   },
+  childrenNotListedIdle:
+    "Agent 处于空闲状态，刷新时不会唤醒它来列出 provider 子 agent；归档前才会检查",
   archiveConfirmedByUser: "归档结果已由用户确认",
   mutationErrors: {
     "card-order-changed": "列内任务顺序或成员已改变，请刷新后重试。",
@@ -560,6 +587,7 @@ const en: typeof zh = {
   noWorkspace: "Draft · no workspace",
   noConversation: "No conversation yet",
   unknownConversation: "Conversation time needs verification",
+  noAgents: "No Agents",
   conversationAtLeast: "No earlier than {date}",
   conversationAtMost: "No later than {date}",
   expires: "Archives {date}",
@@ -585,9 +613,12 @@ const en: typeof zh = {
   autoArchive: "Automatic archive",
   autoArchiveMigrationPaused:
     "An upgrade added a Canceled group whose label may match existing workspaces. Automatic archive was turned off. Review due tasks before re-enabling it; due tasks require confirmation first.",
-  archiveAfterDays: "Days before automatic archive",
-  archiveAfterDaysHint: "Enter an integer from 1 to 365, then save.",
-  archiveAfterDaysInvalid: "Enter an integer from 1 to 365.",
+  archiveCanceled: "Automatically archive Canceled tasks",
+  archiveDone: "Automatically archive Done tasks",
+  archiveCanceledAfterDays: "Canceled archive delay (days)",
+  archiveDoneAfterDays: "Done archive delay (days)",
+  archiveDaysHint: "Enter an integer from 1 to 365, then save.",
+  archiveDaysInvalid: "Enter an integer from 1 to 365.",
   defaultDraftGroupSetting: "Default group for new drafts",
   defaultStartGroupSetting: "Default group for unlabeled workspaces",
   defaultStartWorkGroupSetting: "Default Start work group (In progress)",
@@ -595,15 +626,34 @@ const en: typeof zh = {
   detachDraft: "Restore merged draft",
   detachDraftConfirm:
     "Restore “{name}” as an independent draft and remove its originally appended text from this task's notes?",
-  autoArchiveHint:
-    "Archive a completed or canceled workspace after {days} days since its last conversation.",
-  enableAutoArchive: "Enable automatic archive",
+  archiveRuleHint:
+    "Archive after {days} days since the last verified conversation when safety checks pass.",
+  archiveCandidates: "Tasks due for archive",
+  archiveCandidatesEmpty: "No tasks are currently due under the new settings.",
+  archiveCandidateDue: "{days}-day delay · Due: {date}",
+  archiveCandidateExact: "Last verified conversation: {date}",
+  archiveCandidateScheduled:
+    "Recorded activity is due for recheck; the last conversation time has not been verified.",
+  archiveCandidateUpperBound:
+    "Last conversation no later than: {date} (conservative recorded-activity bound)",
+  enableAutoArchive: "Save automatic archive settings",
   enableAutoArchiveConfirm:
-    "{count} task(s) are currently due. Enabling this will archive their workspaces after safety checks, which may stop agents and terminals and remove managed worktrees.",
+    "{count} task(s) are due under the new settings ({canceled} Canceled, {done} Done). Saving will archive their workspaces after safety checks, which may stop agents and terminals and remove managed worktrees.",
   enable: "Enable",
   pinInProgressWorkspaces: "Pin in-progress tasks in the Paseo sidebar",
   pinInProgressHint:
     "Use the In progress group. Leaving it removes only the pin added by this plugin; manually pinned workspaces stay pinned.",
+  exclusiveStatusLabels: "Exclusive status labels (newest replaces old)",
+  exclusiveStatusHint:
+    "When a task gains a new status label outside Workboard, remove the previous status label and keep only the latest group. Only labels configured as groups below are affected; ordinary labels are untouched. Conflicts whose newest label cannot be determined still raise the banner.",
+  dateFilter: "Date",
+  dateRanges: {
+    any: "Any time",
+    today: "Today",
+    "3days": "Last 3 days",
+    week: "This week",
+    month: "This month",
+  },
   settingsTitle: "Settings",
   generalSettings: "General",
   groups: "Groups",
@@ -642,9 +692,9 @@ const en: typeof zh = {
       "Pins only when automatic sidebar pinning is enabled. Leaving the group removes only the pin added by this plugin.",
     review:
       "Waits for human acceptance. An agent finishing does not mark the task done.",
-    done: "Archives a workspace only when automatic archive is enabled, its last conversation is over {days} days old, and safety checks pass.",
+    done: "Archives a workspace only when the Done automatic-archive rule is enabled, its delay has elapsed, and safety checks pass.",
     canceled:
-      "Archives a workspace only when automatic archive is enabled, its last conversation is over {days} days old, and safety checks pass. Drafts can be archived manually.",
+      "Archives a workspace only when the Canceled automatic-archive rule is enabled, its delay has elapsed, and safety checks pass. Drafts can be archived manually.",
   },
   groupTasks: "{count} tasks",
   defaultGroup: "Default for drafts",
@@ -662,6 +712,8 @@ const en: typeof zh = {
   noStartGroup: "Add an In progress group in settings before starting work.",
   duePreview:
     "With this mapping, {count} due task(s) will be handled at the next check.",
+  duePreviewBreakdown:
+    "With these rules, currently due: {canceled} Canceled, {done} Done.",
   mappingPreview: "This mapping affects {count} linked task(s).",
   activity: {
     idle: "Idle",
@@ -707,6 +759,8 @@ const en: typeof zh = {
     "child-timeline-unreadable":
       "A provider child's timeline could not be read",
   },
+  childrenNotListedIdle:
+    "The agent is idle, so a refresh does not wake it to list its provider children; they are checked before archive",
   archiveConfirmedByUser: "Archive outcome confirmed by user",
   mutationErrors: {
     "card-order-changed":

@@ -2,6 +2,7 @@ import { StyleSheet, View } from "react-native";
 import { SettingsCard, SettingsSelect } from "@getpaseo/plugin/client/ui";
 import {
   ACTIVITY_FILTERS,
+  DATE_RANGES,
   REQUEST_FILTERS,
   type BoardFilters,
 } from "./filters";
@@ -39,6 +40,17 @@ export function FilterPanel({
           }))}
           onValueChange={(changeRequest: BoardFilters["changeRequest"]) =>
             onChange({ changeRequest })
+          }
+        />
+        <SettingsSelect
+          label={t.dateFilter}
+          value={filters.dateRange}
+          options={DATE_RANGES.map((value) => ({
+            value,
+            label: t.dateRanges[value],
+          }))}
+          onValueChange={(dateRange: BoardFilters["dateRange"]) =>
+            onChange({ dateRange })
           }
         />
       </SettingsCard>

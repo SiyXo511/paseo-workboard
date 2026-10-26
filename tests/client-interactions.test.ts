@@ -147,6 +147,7 @@ import { ListView } from "../client/ListView";
 import { QuickCreate } from "../client/QuickCreate";
 import { useDragHandle } from "../client/drag-handle";
 import { ConfirmationModal } from "../client/ConfirmationModal";
+import { Modal } from "@getpaseo/plugin/client/react-native";
 import { Text } from "react-native";
 import { HintProvider, HintButton } from "../client/Hint";
 
@@ -789,9 +790,9 @@ it("X-01 disables only the pending settings switch and rejects its repeated call
   expect(byID(page.render(), "workboard-pin-in-progress").props.disabled).toBe(
     true,
   );
-  expect(byID(page.render(), "workboard-auto-archive").props.disabled).toBe(
-    false,
-  );
+  expect(
+    byID(page.render(), "workboard-auto-archive-canceled").props.disabled,
+  ).toBe(false);
   await first.props.onValueChange(false);
   expect(runtime.mutation).toHaveBeenCalledOnce();
   expect(runtime.toast.error).toHaveBeenCalledWith(t.mutationPending);
@@ -940,14 +941,15 @@ it("X-01 sends concurrent settings controls to the actual server and reports its
     const first = byID(tree, "workboard-pin-in-progress").props.onValueChange(
       false,
     );
-    const second = byID(tree, "workboard-auto-archive").props.onValueChange(
-      true,
-    );
+    const second = byID(
+      tree,
+      "workboard-auto-archive-canceled",
+    ).props.onValueChange(true);
     await Promise.all([first, second]);
     expect(runtime.mutation).toHaveBeenCalledTimes(2);
     expect(test.store.current.settings).toMatchObject({
       pinInProgressWorkspaces: false,
-      autoArchive: false,
+      archiveCanceledEnabled: false,
     });
     expect(runtime.toast.error).toHaveBeenCalledWith(
       t.mutationErrors["Settings changed; refresh before saving"],
@@ -2485,6 +2487,7 @@ it("L06 compact row keeps request warnings singular and activity metadata on one
     },
     changeRequestUnavailable: true,
     conversationDisplayEvidence: "unknown",
+    agents: [{ id: "a1", title: "Run", activity: "idle", archived: true }],
   } as Card;
   const row = taskComponent(value, { presentation: "row", compact: true });
   let tree = row.render();
@@ -2519,6 +2522,22 @@ it("L06 compact row keeps request warnings singular and activity metadata on one
   expect(byLabel(tree, t.checks.failure)).toBeDefined();
   expect(byLabel(tree, t.reviews.changes_requested)).toBeDefined();
   expect(warningCount()).toBe(1);
+});
+
+it("shows No Agents instead of unverified time for agentless bound workspaces", () => {
+  const value = {
+    ...card("one", "review", "w"),
+    conversationDisplayEvidence: "unknown",
+  } as Card;
+  for (const presentation of ["card", "row"] as const) {
+    const tree = taskComponent(value, { presentation }).render();
+    const texts = elements(tree)
+      .filter((element) => element.type === Text)
+      .map((element) => text(element));
+    expect(texts.filter((value) => value === t.noAgents)).toHaveLength(1);
+    expect(texts).not.toContain(t.unknownConversation);
+    expect(texts).not.toContain(t.activity.idle);
+  }
 });
 
 it("L07 latest move feedback survives filtering and collapse, then undoes the newest move without reviving an older one", async () => {
@@ -2849,4 +2868,38 @@ it("L14 feedback expires from the newest move's own eight-second window without 
   );
   vi.advanceTimersByTime(1);
   expect(() => byID(screen.render(), "workboard-move-feedback")).toThrow();
+});
+
+it("renders confirmation details between its summary and actions without changing cancellation", () => {
+  const close = vi.fn();
+  const confirm = vi.fn();
+  const modal = mount(ConfirmationModal, {
+    title: "Archive settings",
+    description: "2 tasks due",
+    children: "Candidate workspace details",
+    scrollable: false,
+    confirmLabel: "Save",
+    disabled: false,
+    t,
+    theme,
+    onClose: close,
+    onConfirm: confirm,
+  });
+  const content = text(modal.render());
+  expect(
+    find(modal.render(), (element) => element.type === Modal.Content).props
+      .scrollable,
+  ).toBe(false);
+  expect(content.indexOf("Candidate workspace details")).toBeGreaterThan(
+    content.indexOf("2 tasks due"),
+  );
+  expect(content.indexOf("Candidate workspace details")).toBeLessThan(
+    content.indexOf(t.cancel),
+  );
+  find(
+    modal.render(),
+    (element) => element.props.onPress && text(element) === t.cancel,
+  ).props.onPress();
+  expect(close).toHaveBeenCalledOnce();
+  expect(confirm).not.toHaveBeenCalled();
 });

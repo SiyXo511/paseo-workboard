@@ -1,4 +1,6 @@
 import {
+  archiveDelayFor,
+  archiveDueAt,
   archiveGate,
   isArchiveDue,
   defaultGroup,
@@ -12,7 +14,12 @@ import {
   type Settings,
   type Stage,
 } from "../shared/model";
-import { DEFAULT_FILTERS, matchesRequest, type BoardFilters } from "./filters";
+import {
+  DEFAULT_FILTERS,
+  matchesDateRange,
+  matchesRequest,
+  type BoardFilters,
+} from "./filters";
 
 const attentionIssues = new Set([
   "labels-conflict",
@@ -28,6 +35,27 @@ const attentionIssues = new Set([
   "directory-unavailable",
 ]);
 
+/** The time the server judges due dates by: the real clock, plus its test-only offset. */
+export function boardNow(board: Pick<Board, "clockOffsetMs">): number {
+  return Date.now() + (board.clockOffsetMs ?? 0);
+}
+
+export function hasNoAgents(card: Card): boolean {
+  return card.workspaceId !== null && card.agents.length === 0;
+}
+
+/**
+ * Whether the card's provider children are unlisted only because an idle parent was left alone
+ * on purpose. The server decides that from the conversation evidence (a schedule exists only
+ * when nothing else keeps the gate unknown); the client does not infer it from agent activity.
+ */
+export function childrenSkippedForIdle(card: Card): boolean {
+  return (
+    card.conversationReason === "child-enumeration-unavailable" &&
+    card.recheckAt != null
+  );
+}
+
 export function attentionReasons(card: Card): string[] {
   const reasons: string[] = [];
   if (["waiting", "error", "attention"].includes(card.activity))
@@ -36,6 +64,7 @@ export function attentionReasons(card: Card): string[] {
   if (
     card.issue &&
     attentionIssues.has(card.issue) &&
+    !(card.issue === "conversation-unknown" && hasNoAgents(card)) &&
     !reasons.includes(card.issue)
   )
     reasons.push(card.issue);
@@ -57,7 +86,11 @@ export function visibleCards(
   projectId: string,
   search: string,
   attentionOnly: boolean,
-  filters: Pick<BoardFilters, "activity" | "changeRequest"> = DEFAULT_FILTERS,
+  filters: Pick<
+    BoardFilters,
+    "activity" | "changeRequest" | "dateRange"
+  > = DEFAULT_FILTERS,
+  now: number = Date.now(),
 ): Card[] {
   const needle = search.trim().toLocaleLowerCase();
   return board.cards.filter(
@@ -71,6 +104,7 @@ export function visibleCards(
       (!attentionOnly || attentionReasons(card).length > 0) &&
       (filters.activity === "all" || card.activity === filters.activity) &&
       matchesRequest(card, filters.changeRequest) &&
+      matchesDateRange(card, filters.dateRange, now) &&
       (!needle ||
         `${card.title} ${card.projectName} ${card.description}`
           .toLocaleLowerCase()
@@ -157,41 +191,69 @@ export function edgeScrollSpeed(x: number, width: number): number {
   return 0;
 }
 
+type ArchiveCandidate = {
+  card: Card;
+  kind: Extract<Group["kind"], "done" | "canceled">;
+  days: number;
+  conversationAt: string;
+  dueAt: string;
+  /** The time is only a scheduled recheck, not a bound on the conversation. */
+  scheduled: boolean;
+};
+
 export function mappingPreview(
   cards: readonly Card[],
   settings: Settings,
   now: number,
-): { affected: number; due: number } {
-  return cards.reduce(
-    (result, card) => {
-      if (
-        card.workspaceId === null ||
-        card.archived?.status === "archived" ||
-        card.archived?.status === "external"
-      )
-        return result;
-      const stage = resolveStage(
-        card.labels,
-        settings.groups,
-        settings.defaultStartGroup,
-      );
-      if (stage !== card.stage) result.affected += 1;
-      if (
-        archiveGate(card) !== null &&
-        !card.archived &&
-        !card.binding &&
-        isArchiveDue(
-          groupKind(stage, settings.groups),
-          archiveGate(card),
-          now,
-          settings.archiveAfterDays,
-        )
-      )
-        result.due += 1;
-      return result;
-    },
-    { affected: 0, due: 0 },
-  );
+) {
+  let affected = 0;
+  const candidates: ArchiveCandidate[] = [];
+  for (const card of cards) {
+    if (
+      card.workspaceId === null ||
+      card.archived?.status === "archived" ||
+      card.archived?.status === "external"
+    )
+      continue;
+    const stage = resolveStage(
+      card.labels,
+      settings.groups,
+      settings.defaultStartGroup,
+    );
+    if (stage !== card.stage) affected += 1;
+    const kind = groupKind(stage, settings.groups);
+    // A scheduled idle recheck may archive right after the rule is enabled, so it belongs in
+    // the confirmation; the hint itself never authorizes anything.
+    const gate = archiveGate(card);
+    const conversationAt = gate ?? card.recheckAt ?? null;
+    const days = archiveDelayFor(settings, kind);
+    const dueAt = archiveDueAt(conversationAt, days);
+    if (
+      (kind === "done" || kind === "canceled") &&
+      conversationAt !== null &&
+      days !== null &&
+      dueAt !== null &&
+      !card.archived &&
+      !card.binding &&
+      isArchiveDue(kind, conversationAt, now, days)
+    )
+      candidates.push({
+        card,
+        kind,
+        days,
+        conversationAt,
+        dueAt,
+        scheduled: gate === null,
+      });
+  }
+  return {
+    affected,
+    due: candidates.length,
+    dueDone: candidates.filter((candidate) => candidate.kind === "done").length,
+    dueCanceled: candidates.filter((candidate) => candidate.kind === "canceled")
+      .length,
+    candidates,
+  };
 }
 
 export function groupTasks(cards: readonly Card[], group: Group): Card[] {

@@ -25,7 +25,12 @@ import {
   type GroupColor,
   type StageKind,
 } from "../shared/model";
-import { groupDeleteReason, groupTasks, mappingPreview } from "./board-utils";
+import {
+  boardNow,
+  groupDeleteReason,
+  groupTasks,
+  mappingPreview,
+} from "./board-utils";
 import { groupColor, groupColorValue } from "./colors";
 import { groupTitle, strings } from "./strings";
 import { ConfirmationModal } from "./ConfirmationModal";
@@ -258,11 +263,13 @@ export function GroupEditor({
         mappingPreview(
           board.cards,
           { ...board.settings, groups: withGroup(candidate) },
-          Date.now(),
+          boardNow(board),
         )
       }
-      autoArchive={board.settings.autoArchive}
-      archiveAfterDays={board.settings.archiveAfterDays}
+      autoArchive={
+        board.settings.archiveDoneEnabled ||
+        board.settings.archiveCanceledEnabled
+      }
     />
   );
 }
@@ -277,14 +284,12 @@ function GroupForm({
   onSave,
   preview,
   autoArchive,
-  archiveAfterDays,
 }: Pick<Props, "disabled" | "saving" | "t" | "theme"> & {
   group: Group;
   onClose(): void;
   onSave(group: Group): Promise<string | null>;
   preview(group: Group): ReturnType<typeof mappingPreview>;
   autoArchive: boolean;
-  archiveAfterDays: number;
 }) {
   const initialName = groupTitle(group, t);
   const [name, setName] = useState(initialName);
@@ -376,10 +381,7 @@ function GroupForm({
           </View>
           <SettingsSelect<StageKind>
             label={t.groupType}
-            hint={t.groupTypeHints[kind].replace(
-              "{days}",
-              String(archiveAfterDays),
-            )}
+            hint={t.groupTypeHints[kind]}
             value={kind}
             options={STAGES.map((value) => ({ value, label: t.stages[value] }))}
             onValueChange={setKind}

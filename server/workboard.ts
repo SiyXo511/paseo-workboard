@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import {
+  archiveDelayFor,
   archiveDueAt,
   archiveGate,
   cardsForStage,
@@ -10,10 +11,12 @@ import {
   defaultStartWorkGroup,
   groupKind,
   isArchiveDue,
+  isActiveActivity,
   isDraftGroup,
   isTerminalGroup,
   labelKey,
   newTask,
+  newestConflictStage,
   orderedGroups,
   resolveStage,
   settingsSchema,
@@ -48,6 +51,12 @@ interface WorkspaceConversation {
   gate: ConversationGate;
   reason: ConversationReason | null;
   agents: ConversationAgent[];
+  /**
+   * The recorded time at which this workspace would become due, set only when the single thing
+   * keeping its gate unknown is an idle parent whose children were deliberately not listed.
+   * It schedules an archive recheck and never authorizes an archive.
+   */
+  recheckAt: string | null;
 }
 /** Most severe first, so one reason is stored per task. */
 const REASON_ORDER: ConversationReason[] = [
@@ -58,6 +67,36 @@ const REASON_ORDER: ConversationReason[] = [
   "truncated-window",
 ];
 
+/**
+ * What makes two views of a workspace's agents the same for an archive check. An idle parent's
+ * children come and go with a recheck's listing, so they and its listing state are left out;
+ * a change among them reaches the check through the workspace's change epoch instead.
+ */
+function agentRows(agents: readonly Agent[]): string {
+  const idle = new Set(
+    agents
+      .filter(
+        (a) =>
+          !a.parentAgentId && !a.archivedAt && !isActiveActivity(a.activity),
+      )
+      .map((a) => a.id),
+  );
+  return JSON.stringify(
+    agents
+      .filter((a) => !(a.parentAgentId && idle.has(a.parentAgentId)))
+      .map((a) => [
+        a.id,
+        a.updatedAt,
+        a.lastUserMessageAt,
+        a.activity,
+        a.archivedAt,
+        idle.has(a.id) ? "idle" : a.childEnumeration,
+        a.parentAgentId,
+        a.subagentId,
+      ])
+      .sort(),
+  );
+}
 const labelsEqual = (a: string[], b: string[]) =>
   JSON.stringify(a.map(labelKey).sort()) ===
   JSON.stringify(b.map(labelKey).sort());
@@ -111,6 +150,15 @@ export class Workboard {
   private workspaceEpochs = new Map<string, number>();
   private bindingInFlight = new Set<string>();
   private queuedStarts = new Map<string, number>();
+  /**
+   * Per workspace, when an idle parent's skipped children are the only thing keeping its gate
+   * unknown: the recorded time it becomes due. Rebuilt by every reconcile, so a restart loses
+   * nothing; it only schedules a recheck and never authorizes an archive.
+   */
+  private recheckHints = new Map<string, string>();
+  /** First trustworthy empty inventory in this process, never a task edit timestamp. */
+  private emptySince = new Map<string, string>();
+  private emptyRevision = 0;
   private archiveDeferrals = new Map<
     string,
     {
@@ -128,6 +176,8 @@ export class Workboard {
     private store: Store,
     private now: () => number = Date.now,
     private interval = 60000,
+    /** Reported to clients so their due-date arithmetic uses this clock; 0 outside tests. */
+    private clockOffsetMs = 0,
   ) {}
   private serial<T>(run: () => Promise<T>): Promise<T> {
     const work = this.queue.then(() => {
@@ -217,7 +267,42 @@ export class Workboard {
     return `${this.epoch}:${this.workspaceEpochs.get(id) ?? 0}`;
   }
   agentChanged(id: string): void {
-    this.changed(this.inventory.agents.find((a) => a.id === id)?.workspaceId);
+    this.agentsChanged(
+      this.inventory.agents.find((a) => a.id === id)?.workspaceId,
+    );
+  }
+  agentsChanged(workspaceId?: string): void {
+    this.emptyRevision++;
+    if (workspaceId) this.emptySince.delete(workspaceId);
+    else this.emptySince.clear();
+    this.changed(workspaceId);
+  }
+  private async readInventory(): Promise<Inventory> {
+    const revision = this.emptyRevision;
+    try {
+      const inventory = await this.host.inventory();
+      const occupied = new Set(
+        inventory.agents.map((agent) => agent.workspaceId),
+      );
+      const active = new Set(
+        inventory.workspaces.map((workspace) => workspace.id),
+      );
+      for (const id of this.emptySince.keys())
+        if (occupied.has(id) || !active.has(id)) this.emptySince.delete(id);
+      // Events during the read can describe Agents absent from its final rows.
+      if (revision === this.emptyRevision)
+        for (const workspace of inventory.workspaces)
+          if (!occupied.has(workspace.id) && !this.emptySince.has(workspace.id))
+            this.emptySince.set(
+              workspace.id,
+              new Date(this.now()).toISOString(),
+            );
+      return inventory;
+    } catch (error) {
+      this.emptyRevision++;
+      this.emptySince.clear();
+      throw error;
+    }
   }
   changed(workspaceId?: string): void {
     if (workspaceId)
@@ -244,6 +329,8 @@ export class Workboard {
   disconnected(reason = "Paseo disconnected"): void {
     this.epoch++;
     this.connectionGeneration++;
+    this.emptyRevision++;
+    this.emptySince.clear();
     this.connected = false;
     this.error = reason;
   }
@@ -254,6 +341,7 @@ export class Workboard {
       connected: this.connected,
       error: this.error,
       refreshedAt: this.refreshedAt,
+      clockOffsetMs: this.clockOffsetMs,
       settings: data.settings,
       cardOrderByStage: data.cardOrderByStage,
       projects: this.inventory.projects,
@@ -280,6 +368,10 @@ export class Workboard {
               )
             : task.lastStage
           : task.draftStage;
+        const archiveDelay = archiveDelayFor(
+          data.settings,
+          groupKind(stage, data.settings.groups),
+        );
         return {
           ...task,
           stage,
@@ -298,8 +390,12 @@ export class Workboard {
                 ? "automatic"
                 : "manual",
           dueAt:
-            task.workspaceId && isTerminalGroup(stage, data.settings.groups)
-              ? archiveDueAt(archiveGate(task), data.settings.archiveAfterDays)
+            task.workspaceId && archiveDelay !== null
+              ? archiveDueAt(archiveGate(task), archiveDelay)
+              : null,
+          recheckAt:
+            task.workspaceId && !task.archived
+              ? (this.recheckHints.get(task.workspaceId) ?? null)
               : null,
           agents: agents.map((a) => ({
             id: a.id,
@@ -313,8 +409,15 @@ export class Workboard {
   }
   private async reconcile(scope?: ReadonlySet<string>): Promise<void> {
     const connection = this.connectionGeneration;
-    const inventory = await this.host.inventory();
+    const inventory = await this.readInventory();
     await this.syncPins(inventory, connection);
+    if (this.archiveDeferrals.size) {
+      let cleared: string[] = [];
+      await this.store.update((data) => {
+        cleared = this.pruneArchiveDeferrals(data, inventory.workspaces);
+      });
+      for (const id of cleared) this.archiveDeferrals.delete(id);
+    }
     const prior = this.store.current;
     const observations = new Map<string, WorkspaceConversation>();
     for (const workspace of inventory.workspaces) {
@@ -325,11 +428,49 @@ export class Workboard {
         (task) => task.workspaceId === workspace.id,
       );
       if (scope && !scope.has(workspace.id) && previous) continue;
-      if (previous && this.archiveDeferred(previous, workspace, agents))
+      if (
+        previous &&
+        this.archiveDeferred(previous, workspace, agents) &&
+        !(
+          agents.length === 0 &&
+          this.emptySince.get(workspace.id) !== previous.conversationGateAt
+        )
+      )
         continue;
-      const evidence = await this.observe(agents, previous, this.now());
+      const evidence = await this.observe(
+        agents,
+        previous,
+        this.now(),
+        workspace.id,
+      );
+      if (evidence.recheckAt)
+        this.recheckHints.set(workspace.id, evidence.recheckAt);
+      else this.recheckHints.delete(workspace.id);
       if (previous && this.archiveDeferrals.has(previous.id)) {
-        if (evidence.gate === "unknown")
+        const kind = groupKind(
+          resolveStage(
+            workspace.labels,
+            prior.settings.groups,
+            prior.settings.defaultStartGroup,
+          ),
+          prior.settings.groups,
+        );
+        // A scheduled recheck keeps its own backoff: its gate is unknown by design, and
+        // deferring again here would push the retry further out on every refresh. Its
+        // scheduled time still shows whether the deferral applies at all.
+        const scheduled =
+          evidence.gate === "unknown" ? evidence.recheckAt : null;
+        if (scheduled !== null) {
+          if (
+            !isArchiveDue(
+              kind,
+              scheduled,
+              this.now(),
+              archiveDelayFor(prior.settings, kind),
+            )
+          )
+            this.archiveDeferrals.delete(previous.id);
+        } else if (evidence.gate === "unknown")
           await this.deferArchive(
             previous,
             "conversation-unknown",
@@ -338,17 +479,10 @@ export class Workboard {
           );
         else if (
           !isArchiveDue(
-            groupKind(
-              resolveStage(
-                workspace.labels,
-                prior.settings.groups,
-                prior.settings.defaultStartGroup,
-              ),
-              prior.settings.groups,
-            ),
+            kind,
             evidence.gateAt,
             this.now(),
-            prior.settings.archiveAfterDays,
+            archiveDelayFor(prior.settings, kind),
           )
         )
           this.archiveDeferrals.delete(previous.id);
@@ -357,9 +491,16 @@ export class Workboard {
     }
     if (this.stopped) throw new Error("Workboard stopped");
     this.inventory = inventory;
+    const resolutions: Array<{
+      taskId: string;
+      workspaceId: string;
+      stage: Stage;
+      labels: string[];
+    }> = [];
     await this.store.update((data) => {
       for (const workspace of inventory.workspaces) {
         let task = data.tasks.find((t) => t.workspaceId === workspace.id);
+        const imported = !task;
         if (!task) {
           task = {
             ...newTask(
@@ -379,12 +520,58 @@ export class Workboard {
         task.title = workspace.name;
         task.projectId = workspace.projectId;
         task.projectName = workspace.projectDisplayName;
-        task.lastStage = resolveStage(
+        const priorStage = imported ? null : task.lastStage;
+        const stage = resolveStage(
           workspace.labels,
           data.settings.groups,
           data.settings.defaultStartGroup,
         );
-        const observation = observations.get(workspace.id);
+        task.lastStage = stage;
+        // A clean observation refreshes the newest-wins attribution baseline; a conflict
+        // must not, or one failed sync would make every later conflict unattributable.
+        if (stage !== "conflict") task.resolvedStage = stage;
+        // Newest-wins exclusivity: an external edit that added one status label on top of
+        // the baseline stage's label is resolvable; any other conflict shape stays manual.
+        const baseline =
+          task.resolvedStage ??
+          (priorStage !== null && priorStage !== "conflict"
+            ? priorStage
+            : null);
+        if (
+          stage === "conflict" &&
+          baseline !== null &&
+          data.settings.exclusiveStatusLabels &&
+          task.workspaceId &&
+          !task.binding
+        ) {
+          const newcomer = newestConflictStage(
+            baseline,
+            workspace.labels,
+            data.settings.groups,
+          );
+          if (newcomer)
+            resolutions.push({
+              taskId: task.id,
+              workspaceId: task.workspaceId,
+              stage: newcomer,
+              labels: statusLabels(workspace.labels, data.settings.groups),
+            });
+        }
+        let observation = observations.get(workspace.id);
+        if (
+          observation?.gate === "upper-bound" &&
+          !inventory.agents.some(
+            (agent) => agent.workspaceId === workspace.id,
+          ) &&
+          this.emptySince.get(workspace.id) !== observation.gateAt
+        )
+          observation = {
+            ...observation,
+            displayAt: null,
+            display: "unknown",
+            gateAt: null,
+            gate: "unknown",
+          };
         if (observation) {
           task.lastConversationAt = observation.displayAt;
           task.conversationDisplayEvidence = observation.display;
@@ -395,17 +582,9 @@ export class Workboard {
           task.conversationAgents = observation.agents;
         }
         task.issue =
-          task.archived?.status === "uncertain"
-            ? "native-archive-unknown"
-            : task.binding
-              ? "label-sync-incomplete"
-              : task.lastStage === "conflict"
-                ? "labels-conflict"
-                : task.conversationStatus === "unknown"
-                  ? "conversation-unknown"
-                  : task.conversationStatus === "none"
-                    ? "no-conversation"
-                    : (this.archiveDeferrals.get(task.id)?.reason ?? null);
+          this.observedIssue(task) ??
+          this.archiveDeferrals.get(task.id)?.reason ??
+          null;
       }
       for (const task of data.tasks) {
         if (
@@ -438,23 +617,72 @@ export class Workboard {
     this.connected = true;
     this.error = null;
     this.refreshedAt = this.stamp();
+    if (resolutions.length) await this.resolveExclusivityConflicts(resolutions);
+  }
+  /**
+   * Newest-wins resolution of an exclusively conflicting status label: re-run the same
+   * verified label sync a stage change uses, then record the fixed stage. A stale or
+   * failing sync keeps the conflict issue for manual resolution.
+   */
+  private async resolveExclusivityConflicts(
+    resolutions: ReadonlyArray<{
+      taskId: string;
+      workspaceId: string;
+      stage: Stage;
+      labels: string[];
+    }>,
+  ): Promise<void> {
+    for (const resolution of resolutions) {
+      if (this.stopped) return;
+      try {
+        const workspace = await this.transition(
+          resolution.workspaceId,
+          resolution.stage,
+          resolution.labels,
+        );
+        this.inventory.workspaces = this.inventory.workspaces.map((w) =>
+          w.id === workspace.id ? workspace : w,
+        );
+        await this.store.update((data) => {
+          const task = data.tasks.find((t) => t.id === resolution.taskId);
+          if (!task) return;
+          task.lastStage = resolution.stage;
+          task.resolvedStage = resolution.stage;
+          if (task.issue === "labels-conflict") task.issue = null;
+        });
+        this.changed(resolution.workspaceId);
+      } catch {
+        // The conflict banner stays until the labels are fixed by hand.
+      }
+    }
   }
   /**
    * Combine every agent's evidence into one display time and one archive gate. Only a full
    * exact read of every agent and every provider child can claim an exact time; anything
-   * else keeps the newest observed bound so a task never loses its card time, while the gate
-   * stays an upper bound that can only delay archiving.
+   * else keeps the newest observed bound for display. The archive gate needs a bound for
+   * every agent and child; an incomplete inventory leaves it unknown.
    */
   private async observe(
     agents: readonly Agent[],
     previous: Task | undefined,
     now: number,
-    options: { archivedTimeline?: boolean } = {},
+    workspaceId: string,
+    options: { recheck?: boolean } = {},
   ): Promise<WorkspaceConversation> {
-    // Every tab was removed, so no timeline remains. The task record was last touched after
-    // the conversation ended, which still bounds it and lets the archive clock keep running.
-    if (agents.length === 0 && !previous?.conversationAgents?.length) {
-      const bound = previous?.updatedAt ?? null;
+    // A single displayed reason can hide another failure, including child enumeration.
+    const unresolvedReason =
+      agents.length === 0 &&
+      previous?.conversationReason &&
+      (previous.conversationGateEvidence === "unknown" ||
+        previous.conversationReason === "child-enumeration-unavailable")
+        ? previous.conversationReason
+        : null;
+    if (
+      agents.length === 0 &&
+      !previous?.conversationAgents.length &&
+      !unresolvedReason
+    ) {
+      const bound = this.emptySince.get(workspaceId);
       if (bound)
         return {
           displayAt: bound,
@@ -463,6 +691,7 @@ export class Workboard {
           gate: "upper-bound",
           reason: null,
           agents: [],
+          recheckAt: null,
         };
     }
     const readings: Array<{
@@ -490,13 +719,44 @@ export class Workboard {
     const reasons = new Set<ConversationReason>();
     let lower: number | null = null;
     let upper: number | null = null;
+    let blocked = false;
+    // Whether anything besides a deliberately skipped idle parent keeps the gate unknown.
+    let hardBlocked = false;
+    if (unresolvedReason) {
+      blocked = true;
+      reasons.add(unresolvedReason);
+    }
+    let skipped = false;
+    const recordedById = new Map(
+      (previous?.conversationAgents ?? []).map((entry) => [entry.id, entry]),
+    );
     for (const { agent, conversation } of readings) {
+      const isChild = Boolean(agent.parentAgentId && agent.subagentId);
       if (conversation.reason) reasons.add(conversation.reason);
+      if (
+        isChild &&
+        conversation.gate === "unknown" &&
+        (conversation.display !== "none" || conversation.reason !== null)
+      ) {
+        blocked = true;
+        if (!agent.parentIdle || options.recheck) hardBlocked = true;
+      }
       if (
         agent.childEnumeration === "refused" ||
         agent.childEnumeration === "unavailable"
-      )
+      ) {
         reasons.add("child-enumeration-unavailable");
+        // Parent activity does not bound a child that could not be listed.
+        blocked = true;
+        hardBlocked = true;
+      }
+      if (agent.childEnumeration === "skipped") {
+        reasons.add("child-enumeration-unavailable");
+        blocked = true;
+        skipped = true;
+        // A recheck lists every idle parent first, so a skipped one there is an error.
+        if (options.recheck) hardBlocked = true;
+      }
       const time = conversation.displayAt
         ? Date.parse(conversation.displayAt)
         : null;
@@ -506,10 +766,13 @@ export class Workboard {
           upper = Math.max(upper ?? time, time);
         else lower = Math.max(lower ?? time, time);
       }
-      const isChild = Boolean(agent.parentAgentId && agent.subagentId);
       const activity = isChild ? null : Date.parse(agent.updatedAt);
       if (activity !== null && Number.isFinite(activity))
         upper = Math.max(upper ?? activity, activity);
+      if (conversation.gate !== "unknown" && conversation.gateAt !== null) {
+        const bound = Date.parse(conversation.gateAt);
+        upper = Math.max(upper ?? bound, bound);
+      }
     }
     const recorded = previous?.conversationAgents ?? [];
     const live = new Set(
@@ -521,27 +784,43 @@ export class Workboard {
       .filter(({ agent }) => Boolean(agent.parentAgentId && agent.subagentId))
       .map(({ agent, conversation }) => ({
         id: agent.id,
-        lastObservedAt: conversation.displayAt,
+        // A child that was not read keeps the time it was last observed at.
+        lastObservedAt:
+          conversation.displayAt ??
+          recordedById.get(agent.id)?.lastObservedAt ??
+          null,
         seenWhileLive: live.has(agent.parentAgentId!),
       }));
     const current = new Set(readings.map(({ agent }) => agent.id));
-    let blocked = false;
+    const skippedParents = new Set(
+      readings
+        .filter(({ agent }) => agent.childEnumeration === "skipped")
+        .map(({ agent }) => agent.id),
+    );
+    // Recorded children that are absent from this inventory have not vanished while their
+    // parent is idle: they are missing only because that parent was not listed.
+    const unlisted = (entry: ConversationAgent) =>
+      skippedParents.has(entry.id.split("/provider/")[0]);
     for (const entry of recorded) {
       if (current.has(entry.id)) continue;
       agentsEvidence.push(entry);
-      // A vanished child cannot be re-read, so this workspace can no longer claim an exact
-      // time. Its recorded observation still participates in both bounds; without one nothing
-      // bounds its conversation any more.
-      reasons.add("child-enumeration-unavailable");
+      if (!unlisted(entry)) {
+        // Its last read cannot cover new messages between that read and removal.
+        blocked = true;
+        hardBlocked = true;
+        reasons.add("child-enumeration-unavailable");
+      }
       const time = entry.lastObservedAt
         ? Date.parse(entry.lastObservedAt)
         : null;
-      if (time === null || !Number.isFinite(time)) {
-        blocked = true;
-        continue;
-      }
-      lower = Math.max(lower ?? time, time);
-      upper = Math.max(upper ?? time, time);
+      if (time !== null && Number.isFinite(time))
+        lower = Math.max(lower ?? time, time);
+    }
+    for (const { agent, conversation } of readings) {
+      if (!agent.parentIdle || conversation.displayAt) continue;
+      const kept = recordedById.get(agent.id)?.lastObservedAt;
+      const time = kept ? Date.parse(kept) : NaN;
+      if (Number.isFinite(time)) lower = Math.max(lower ?? time, time);
     }
     if (lower !== null) upper = Math.max(upper ?? lower, lower);
     // Derived after the vanished children folded in: their reasons and their time decide whether
@@ -588,6 +867,10 @@ export class Workboard {
       gate,
       reason: exact || noConversation ? null : reason,
       agents: agentsEvidence,
+      recheckAt:
+        skipped && !hardBlocked && upper !== null
+          ? new Date(upper).toISOString()
+          : null,
     };
   }
   /**
@@ -597,26 +880,58 @@ export class Workboard {
   private async verifyConversation(
     candidate: Task,
     agents: readonly Agent[],
-  ): Promise<string | null> {
-    let gate: number | null = null;
+  ): Promise<{ gate: string | null; agents: readonly Agent[] }> {
+    let checked = agents;
     try {
-      // The archive candidate is the one place that pays for an archived agent's timeline,
-      // and a vanished child without a recorded time already forces an unknown gate.
-      const evidence = await this.observe(agents, candidate, this.now(), {
-        archivedTimeline: true,
+      // The recheck is the one place that loads an idle agent: it lists every idle parent's
+      // children and reads the idle histories, and a failed or overtaken listing rejects.
+      checked = await this.host.recheckAgents(agents);
+      const evidence = await this.observe(
+        checked,
+        candidate,
+        this.now(),
+        candidate.workspaceId!,
+        {
+          recheck: true,
+        },
+      );
+      // Keep what was learned as display evidence, so a refresh does not make the same
+      // candidate read the same history again. It never moves backwards and never gates.
+      await this.store.update((data) => {
+        const task = data.tasks.find((t) => t.id === candidate.id);
+        if (!task || task.workspaceId !== candidate.workspaceId) return;
+        const before = new Map(task.conversationAgents.map((e) => [e.id, e]));
+        const later = (a: string | null, b: string | null) =>
+          a === null
+            ? b
+            : b === null
+              ? a
+              : Date.parse(a) >= Date.parse(b)
+                ? a
+                : b;
+        task.conversationAgents = evidence.agents.map((entry) => ({
+          ...entry,
+          lastObservedAt: later(
+            before.get(entry.id)?.lastObservedAt ?? null,
+            entry.lastObservedAt,
+          ),
+        }));
+        for (const [id, entry] of before)
+          if (!task.conversationAgents.some((e) => e.id === id))
+            task.conversationAgents.push(entry);
       });
       const at = archiveGate({
         conversationGateAt: evidence.gateAt,
         conversationGateEvidence: evidence.gate,
       });
-      if (at === null) return null;
-      gate = Date.parse(at);
+      const gate = at === null ? NaN : Date.parse(at);
+      return {
+        gate: Number.isFinite(gate) ? new Date(gate).toISOString() : null,
+        agents: checked,
+      };
     } catch {
-      return null;
+      return { gate: null, agents };
     }
-    return gate === null || !Number.isFinite(gate)
-      ? null
-      : new Date(gate).toISOString();
   }
   private async syncPins(
     inventory: Inventory,
@@ -686,11 +1001,16 @@ export class Workboard {
         if (!active.has(id)) delete data.autoPins[id];
     });
   }
+  /**
+   * Persists settings and reports whether groups changed. Group edits re-derive every task's
+   * stage and label mapping, so the caller must reconcile; a preference-only save (a toggle)
+   * is fully reflected by the response board and the debounced refresh that follows.
+   */
   private async saveSettings(
     settings: Settings,
     revision: number,
     expectedSettings?: Settings,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const previous = this.store.current;
     const unchanged = (data: typeof previous) =>
       expectedSettings
@@ -704,7 +1024,8 @@ export class Workboard {
       isTerminalGroup(next.defaultStartGroup, next.groups)
     )
       throw new Error("group-default-terminal");
-    if (next.autoArchive) next.archiveMappingNeedsReview = false;
+    if (next.archiveDoneEnabled || next.archiveCanceledEnabled)
+      next.archiveMappingNeedsReview = false;
     const previousIds = previous.settings.groups.map((group) => group.id);
     const nextIds = next.groups.map((group) => group.id);
     const retained = nextIds.filter((id) => previousIds.includes(id));
@@ -754,7 +1075,7 @@ export class Workboard {
     }
     if (removed.length) {
       const epoch = this.epoch;
-      const inventory = await this.host.inventory();
+      const inventory = await this.readInventory();
       if (epoch !== this.epoch || !this.connected)
         throw new Error("Workspaces changed; refresh before deleting a group");
       for (const group of removed) {
@@ -802,12 +1123,16 @@ export class Workboard {
         throw new Error("group-default-in-use");
       throw new Error("group-default-start-work-invalid");
     }
+    let cleared: string[] = [];
     await this.store.update((data) => {
       if (!unchanged(data))
         throw new Error("Settings changed; refresh before saving");
       for (const group of removed) delete data.cardOrderByStage[group.id];
       data.settings = next;
+      cleared = this.pruneArchiveDeferrals(data, this.inventory.workspaces);
     });
+    for (const id of cleared) this.archiveDeferrals.delete(id);
+    return !isDeepStrictEqual(next.groups, previous.settings.groups);
   }
   private checkCardOrder(
     data: Data,
@@ -910,12 +1235,13 @@ export class Workboard {
             data.tasks.push(task);
           });
         } else if (input.action === "settings") {
-          await this.saveSettings(
+          const groupsChanged = await this.saveSettings(
             input.settings,
             input.revision,
             input.expectedSettings,
           );
-          await this.reconcile();
+          // A full reconcile re-reads every conversation; only group edits need one now.
+          if (groupsChanged) await this.reconcile();
           this.changed();
         } else if (
           input.action === "reorder-cards" ||
@@ -1043,6 +1369,11 @@ export class Workboard {
                 const current = data.tasks.find((t) => t.id === task.id)!;
                 this.checkStageExpected(data, input);
                 current.lastStage = input.stage;
+                // The verified sync made this a clean observation: move the
+                // newest-wins baseline with it, or an external label change
+                // arriving before the next refresh would be attributed
+                // against the stale stage and could delete the newer label.
+                current.resolvedStage = input.stage;
                 current.updatedAt = this.stamp(current.updatedAt);
                 if (current.issue === "labels-conflict") current.issue = null;
               });
@@ -1057,6 +1388,7 @@ export class Workboard {
                 this.checkStageExpected(data, input);
                 current.draftStage = input.stage;
                 current.lastStage = input.stage;
+                current.resolvedStage = input.stage;
                 current.updatedAt = this.stamp(current.updatedAt);
               });
             }
@@ -1173,6 +1505,9 @@ export class Workboard {
                 if (archive.kind === "draft")
                   current.draftStage = archive.stage;
                 current.lastStage = archive.stage;
+                // Restoring establishes the stage, so the attribution
+                // baseline moves with it.
+                current.resolvedStage = archive.stage;
                 // Keep the manual restore until reconciliation confirms native membership.
                 current.issue = current.workspaceId
                   ? "archive-restored-workspace-unavailable"
@@ -1261,6 +1596,12 @@ export class Workboard {
         await this.store.update((data) => {
           const task = data.tasks.find((t) => t.id === survivorId)!;
           task.binding = null;
+          // The verified sync made binding.stage a clean observation: move
+          // both stage fields with it, or an external label change arriving
+          // before the next reconciliation would be attributed against the
+          // survivor's stale stage and could delete the newer label.
+          task.lastStage = binding.stage;
+          task.resolvedStage = binding.stage;
           task.issue = null;
         });
       } catch (error) {
@@ -1360,18 +1701,7 @@ export class Workboard {
         workspace.workspaceDirectory,
         workspace.gitRuntime?.isPaseoOwnedWorktree,
       ],
-      [...agents]
-        .sort((a, b) => a.id.localeCompare(b.id))
-        .map((agent) => [
-          agent.id,
-          agent.updatedAt,
-          agent.lastUserMessageAt,
-          agent.activity,
-          agent.archivedAt,
-          agent.childEnumeration,
-          agent.parentAgentId,
-          agent.subagentId,
-        ]),
+      agentRows(agents),
     ]);
   }
   private archiveDeferred(
@@ -1386,6 +1716,62 @@ export class Workboard {
       return false;
     }
     return deferred.deferredUntil > this.now();
+  }
+  private observedIssue(task: Task): string | null {
+    return task.archived?.status === "uncertain"
+      ? "native-archive-unknown"
+      : task.binding
+        ? "label-sync-incomplete"
+        : task.lastStage === "conflict"
+          ? "labels-conflict"
+          : task.conversationStatus === "unknown"
+            ? "conversation-unknown"
+            : task.conversationStatus === "none"
+              ? "no-conversation"
+              : null;
+  }
+  /** Clear only this process's obsolete deferrals and their owned warning. */
+  private pruneArchiveDeferrals(
+    data: Data,
+    workspaces: readonly Workspace[],
+  ): string[] {
+    const cleared: string[] = [];
+    for (const [id, deferred] of this.archiveDeferrals) {
+      const task = data.tasks.find((task) => task.id === id);
+      if (!task || task.archived || task.binding) {
+        cleared.push(id);
+        continue;
+      }
+      const workspace = workspaces.find(
+        (workspace) => workspace.id === task.workspaceId,
+      );
+      const stage = workspace
+        ? resolveStage(
+            workspace.labels,
+            data.settings.groups,
+            data.settings.defaultStartGroup,
+          )
+        : task.lastStage;
+      const kind = groupKind(stage, data.settings.groups);
+      const delay = archiveDelayFor(data.settings, kind);
+      // An idle task's scheduled recheck time stands in for the unknown stored gate when
+      // judging applicability; it only ever clears a deferral, never authorizes an archive.
+      const gate =
+        archiveGate(task) ??
+        (task.workspaceId
+          ? (this.recheckHints.get(task.workspaceId) ?? null)
+          : null);
+      // Missing evidence is not proof that an enabled rule is no longer due.
+      if (
+        delay !== null &&
+        (gate === null || isArchiveDue(kind, gate, this.now(), delay))
+      )
+        continue;
+      cleared.push(id);
+      if (task.issue === deferred.reason) task.issue = this.observedIssue(task);
+    }
+    // Callers delete from the in-memory map only after the storage write succeeds.
+    return cleared;
   }
   private async deferArchive(
     task: Task,
@@ -1406,27 +1792,29 @@ export class Workboard {
     await this.issue(task.id, reason);
   }
   private async scan(scope?: ReadonlySet<string>): Promise<void> {
-    if (!this.connected || !this.store.current.settings.autoArchive) return;
+    if (!this.connected) return;
     const tasks = this.store.current.tasks;
     for (const id of this.archiveDeferrals.keys())
       if (
         !tasks.some((task) => task.id === id && !task.archived && !task.binding)
       )
         this.archiveDeferrals.delete(id);
+    const settings = this.store.current.settings;
     const candidates = tasks.filter((task) => {
       const id = task.workspaceId;
+      const kind = groupKind(task.lastStage, settings.groups);
       return (
         id &&
         (!scope || scope.has(id)) &&
         !task.archived &&
         !task.binding &&
         task.issue !== "archive-restored-workspace-unavailable" &&
-        archiveGate(task) !== null &&
+        (archiveGate(task) ?? this.recheckHints.get(id) ?? null) !== null &&
         isArchiveDue(
-          groupKind(task.lastStage, this.store.current.settings.groups),
-          archiveGate(task),
+          kind,
+          archiveGate(task) ?? this.recheckHints.get(id) ?? null,
           this.now(),
-          this.store.current.settings.archiveAfterDays,
+          archiveDelayFor(settings, kind),
         ) &&
         !this.archiveDeferred(
           task,
@@ -1439,7 +1827,7 @@ export class Workboard {
     const epochs = new Map(
       candidates.map((task) => [task.id, this.observation(task.workspaceId!)]),
     );
-    const inventory = await this.host.inventory();
+    const inventory = await this.readInventory();
     for (const candidate of candidates) {
       if (this.stopped || this.pendingMutations > 0) return;
       const id = candidate.workspaceId!;
@@ -1459,14 +1847,14 @@ export class Workboard {
         this.store.current.settings.groups,
         this.store.current.settings.defaultStartGroup,
       );
-      const agents = inventory.agents.filter(
+      let agents: readonly Agent[] = inventory.agents.filter(
         (agent) => agent.workspaceId === id,
       );
+      // A child of an idle parent is judged after the recheck lists it fresh: the cached
+      // status may be a completion this host never saw.
       if (
         agents.some(
-          (a) =>
-            !a.archivedAt &&
-            (a.activity === "running" || a.activity === "waiting"),
+          (a) => !a.archivedAt && !a.parentIdle && isActiveActivity(a.activity),
         ) ||
         workspace.status === "running" ||
         workspace.status === "needs_input"
@@ -1474,7 +1862,13 @@ export class Workboard {
         await this.deferArchive(candidate, "agent-busy", workspace, agents);
         continue;
       }
-      const gate = await this.verifyConversation(candidate, agents);
+      const verified = await this.verifyConversation(candidate, agents);
+      const gate = verified.gate;
+      agents = verified.agents;
+      if (agents.some((a) => !a.archivedAt && isActiveActivity(a.activity))) {
+        await this.deferArchive(candidate, "agent-busy", workspace, agents);
+        continue;
+      }
       if (gate === null) {
         await this.deferArchive(
           candidate,
@@ -1489,9 +1883,14 @@ export class Workboard {
           groupKind(stage, this.store.current.settings.groups),
           gate,
           this.now(),
-          this.store.current.settings.archiveAfterDays,
+          archiveDelayFor(
+            this.store.current.settings,
+            groupKind(stage, this.store.current.settings.groups),
+          ),
         )
       ) {
+        // Newer evidence moves the next check: the recorded time now includes it.
+        if (gate) this.recheckHints.set(id, gate);
         this.archiveDeferrals.delete(candidate.id);
         continue;
       }
@@ -1528,29 +1927,15 @@ export class Workboard {
       // Storage and safety checks can take time. Re-read membership, labels and Agent state before sending.
       let finalIssue: string | null = null;
       try {
-        const fresh = await this.host.inventory();
+        const fresh = await this.readInventory();
         const current = fresh.workspaces.find((w) => w.id === id);
         const currentAgents = fresh.agents.filter((a) => a.workspaceId === id);
-        const fingerprint = (items: typeof agents) =>
-          JSON.stringify(
-            items
-              .map((a) => [
-                a.id,
-                a.updatedAt,
-                a.lastUserMessageAt,
-                a.activity,
-                a.archivedAt,
-                a.childEnumeration,
-              ])
-              .sort(),
-          );
+        const fingerprint = (items: readonly Agent[]) => agentRows(items);
         if (
           !current ||
           current.archivingAt ||
           current.status === "running" ||
           current.status === "needs_input" ||
-          // A refused child listing for an archived parent keeps the gate on its recorded
-          // bounds, so it must not defer the archive forever as a state change would.
           resolveStage(
             current.labels,
             this.store.current.settings.groups,
@@ -1582,7 +1967,7 @@ export class Workboard {
           throw new Error(
             result.error ?? "Native archive returned no timestamp",
           );
-        const active = await this.host.inventory();
+        const active = await this.readInventory();
         this.inventory = active;
         if (active.workspaces.some((w) => w.id === id))
           throw new Error(

@@ -1,5 +1,22 @@
 {
   "id": "paseo-workboard",
-  "description": "Workspace tasks, draft todos and a label-linked kanban for Paseo",
-  "requirements": { "paseo": ">=0.9.1" }
+  "description": "Workspace tasks and draft ideas in a label-linked board or list for Paseo",
+  "requirements": {
+    "paseo": ">=0.11.0"
+  },
+  "name": "Workboard",
+  "icon": "images/icon.png",
+  "media": [
+    "images/workboard-en.png",
+    "images/list-en.png",
+    "images/views-filter-en.gif",
+    "images/move-undo-en.gif",
+    "images/settings-en.png"
+  ],
+  "translations": {
+    "zh-CN": {
+      "name": "Workboard",
+      "description": "在看板或列表中管理 Paseo workspace 与草稿，通过标签同步任务状态"
+    }
+  }
 }

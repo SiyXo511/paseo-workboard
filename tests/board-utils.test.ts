@@ -7,8 +7,10 @@ import {
   type Card,
 } from "../shared/model";
 import {
+  boardNow,
   cardsForStage,
   attentionReasons,
+  childrenSkippedForIdle,
   groupDeleteReason,
   groupTasks,
   mappingPreview,
@@ -33,6 +35,12 @@ const card = (overrides: Partial<Card>): Card => ({
   agents: [],
   ...overrides,
 });
+const archivedAgent = {
+  id: "agent-1",
+  title: "Old session",
+  activity: "idle" as const,
+  archived: true,
+};
 const board = (cards: Card[]) => ({ cards }) as Board;
 
 describe("card drag targets", () => {
@@ -108,7 +116,11 @@ describe("board card selection", () => {
       card({ id: "unread", activity: "attention" }),
       card({ id: "conflict", stage: "conflict" }),
       card({ id: "binding", issue: "label-sync-incomplete" }),
-      card({ id: "history-unknown", issue: "conversation-unknown" }),
+      card({
+        id: "history-unknown",
+        issue: "conversation-unknown",
+        agents: [archivedAgent],
+      }),
       card({ id: "dirty", issue: "git-dirty" }),
       card({ id: "unpushed", issue: "git-unpushed" }),
       card({ id: "terminal", issue: "terminal-open" }),
@@ -129,6 +141,49 @@ describe("board card selection", () => {
       "archive-unknown",
     ]);
     expect(visibleCards(board(cards), "all", "", false)).toEqual(cards);
+  });
+
+  it("does not flag agentless workspaces for unknown conversation time", () => {
+    const unknown = card({ id: "none", issue: "conversation-unknown" });
+    expect(attentionReasons(unknown)).toEqual([]);
+    expect(
+      visibleCards(board([unknown]), "all", "", true).map((item) => item.id),
+    ).toEqual([]);
+    expect(attentionReasons(card({ issue: "git-dirty", agents: [] }))).toEqual([
+      "git-dirty",
+    ]);
+    expect(
+      attentionReasons(
+        card({ issue: "conversation-unknown", agents: [archivedAgent] }),
+      ),
+    ).toEqual(["conversation-unknown"]);
+    expect(
+      attentionReasons(
+        card({ issue: "conversation-unknown", workspaceId: null }),
+      ),
+    ).toEqual(["conversation-unknown"]);
+  });
+
+  it("keeps other attention reasons when an agentless workspace has unknown conversation time", () => {
+    const value = card({
+      issue: "conversation-unknown",
+      stage: "conflict",
+      changeRequest: {
+        forge: "github",
+        number: 42,
+        url: "https://code.example/repo/pull/42",
+        title: "Fix workspace sync",
+        state: "open",
+        checksStatus: "failure",
+        reviewDecision: "changes_requested",
+      },
+    });
+    expect(attentionReasons(value)).toEqual([
+      "labels-conflict",
+      "checks-failure",
+      "changes-requested",
+    ]);
+    expect(visibleCards(board([value]), "all", "", true)).toEqual([value]);
   });
 
   it("flags failing checks or requested changes only on current open change requests", () => {
@@ -435,7 +490,8 @@ describe("board card selection", () => {
     const settings = {
       ...settingsSchema.parse({}),
       groupOrder: [],
-      autoArchive: true,
+      archiveDoneEnabled: true,
+      archiveCanceledEnabled: true,
       pinInProgressWorkspaces: true,
       groups: DEFAULT_GROUPS.map((group) => ({ ...group, label: group.id })),
     };
@@ -459,10 +515,20 @@ describe("board card selection", () => {
         conversationStatus: "unknown",
         lastConversationAt: "2025-01-01T00:00:00Z",
       }),
+      card({
+        id: "canceled",
+        stage: "canceled",
+        labels: ["canceled"],
+        conversationStatus: "known",
+        conversationDisplayEvidence: "exact",
+        conversationGateEvidence: "exact",
+        conversationGateAt: "2025-01-01T00:00:00Z",
+        lastConversationAt: "2025-01-01T00:00:00Z",
+      }),
     ];
     expect(
       mappingPreview(cards, settings, Date.parse("2026-02-01T00:00:00Z")),
-    ).toEqual({ affected: 1, due: 1 });
+    ).toMatchObject({ affected: 1, due: 2, dueDone: 1, dueCanceled: 1 });
   });
 });
 
@@ -510,4 +576,118 @@ it("explains an unlabeled workspace's default occupancy separately from an expli
       DEFAULT_GROUPS.find((g) => g.kind === "canceled")!,
     ),
   ).toBe("groupNeedsCanceled");
+});
+
+it("returns exactly the due candidates and proposed deadlines used by preview counts", () => {
+  const old = "2026-01-01T00:00:00Z";
+  const due = (id: string, kind = "done", overrides: Partial<Card> = {}) =>
+    card({
+      id,
+      title: `Workspace ${id}`,
+      stage: kind,
+      labels: [`task:${kind}`],
+      conversationGateEvidence: "exact",
+      conversationGateAt: old,
+      dueAt: "2099-01-01T00:00:00Z",
+      ...overrides,
+    });
+  const pending = {
+    operationId: "op",
+    status: "pending" as const,
+    kind: "automatic" as const,
+    stage: "done",
+    group: null,
+    startedAt: old,
+    archivedAt: null,
+    lastConversationAt: old,
+    detail: "Fixture archive",
+  };
+  const cards = [
+    due("done"),
+    due("canceled", "canceled", { conversationGateEvidence: "upper-bound" }),
+    due("fresh", "done", { conversationGateAt: "2026-02-01T00:00:00Z" }),
+    due("boundary", "done", { conversationGateAt: "2026-01-02T00:00:00Z" }),
+    due("unknown", "done", { conversationGateEvidence: "unknown" }),
+    due("draft", "done", { workspaceId: null }),
+    due("archiving", "done", { archived: pending }),
+    due("archived", "done", { archived: { ...pending, status: "archived" } }),
+    due("binding", "done", {
+      binding: {
+        operationId: "bind",
+        workspaceId: "w",
+        stage: "done",
+        target: { kind: "existing", workspaceId: "w" },
+      },
+    }),
+    due("conflict", "done", { labels: ["task:done", "task:canceled"] }),
+  ];
+  const settings = settingsSchema.parse({
+    archiveDoneEnabled: true,
+    archiveCanceledEnabled: true,
+    archiveDoneAfterDays: 30,
+    archiveCanceledAfterDays: 7,
+  });
+  const result = mappingPreview(
+    cards,
+    settings,
+    Date.parse("2026-02-01T00:00:00Z"),
+  );
+  expect(
+    result.candidates.map(({ card, kind, days, dueAt }) => ({
+      id: card.id,
+      kind,
+      days,
+      dueAt,
+    })),
+  ).toEqual([
+    { id: "done", kind: "done", days: 30, dueAt: "2026-01-31T00:00:00.000Z" },
+    {
+      id: "canceled",
+      kind: "canceled",
+      days: 7,
+      dueAt: "2026-01-08T00:00:00.000Z",
+    },
+  ]);
+  expect(result).toMatchObject({ due: 2, dueDone: 1, dueCanceled: 1 });
+  const disabled = mappingPreview(
+    cards,
+    { ...settings, archiveDoneEnabled: false },
+    Date.parse("2026-02-01T00:00:00Z"),
+  );
+  expect(disabled.candidates.map(({ card }) => card.id)).toEqual(["canceled"]);
+  expect(disabled).toMatchObject({ due: 1, dueDone: 0, dueCanceled: 1 });
+  expect(mappingPreview([], settings, Date.now()).candidates).toEqual([]);
+});
+
+describe("children skipped for idle agents", () => {
+  const unlisted = (
+    recheckAt: string | null,
+    reason = "child-enumeration-unavailable",
+  ) =>
+    card({
+      conversationReason: reason as Card["conversationReason"],
+      recheckAt,
+      agents: [{ id: "a", title: "A", activity: "idle", archived: false }],
+    });
+  it("follows the server's scheduled-recheck state, not the agents' activity", () => {
+    expect(childrenSkippedForIdle(unlisted("2026-08-01T00:00:00.000Z"))).toBe(
+      true,
+    );
+    expect(childrenSkippedForIdle(unlisted(null))).toBe(false);
+    expect(
+      childrenSkippedForIdle(
+        unlisted("2026-08-01T00:00:00.000Z", "replay-timestamp"),
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("board clock", () => {
+  it("judges due dates by the server's clock, not the browser's alone", () => {
+    const real = Date.now();
+    expect(boardNow({})).toBeGreaterThanOrEqual(real);
+    expect(boardNow({ clockOffsetMs: 3_600_000 })).toBeGreaterThanOrEqual(
+      real + 3_600_000,
+    );
+  });
 });

@@ -11,6 +11,7 @@ import { mutateRpc, snapshotRpc } from "./shared/rpc";
 import { PaseoCompat } from "./server/paseo-compat";
 import { PaseoHost } from "./server/host";
 import { Store } from "./server/store";
+import { workboardClock } from "./server/test-clock";
 import { Workboard } from "./server/workboard";
 
 export function classifyBootFailure(failure: unknown): {
@@ -82,10 +83,11 @@ export default function contribute(server: PluginServerContext) {
       if (disposed) return;
       const identity = await compat.identity();
       board?.dispose();
-      const host = new PaseoHost(api, compat, identity, (id) =>
-        board?.changed(id),
+      const host = new PaseoHost(api, compat, identity, (id, agentsChanged) =>
+        agentsChanged ? board?.agentsChanged(id) : board?.changed(id),
       );
-      board = new Workboard(host, store);
+      const clock = workboardClock();
+      board = new Workboard(host, store, clock.now, undefined, clock.offsetMs);
       await board.start();
     } catch (failure) {
       const classified = classifyBootFailure(failure);

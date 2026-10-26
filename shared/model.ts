@@ -134,14 +134,20 @@ export const groupOrderSchema = z
         message: "Group order cannot contain duplicates",
       });
   });
+const archiveDaysSchema = z.number().int().min(1).max(365);
 const preferences = {
-  autoArchive: z.boolean().default(false),
   archiveMappingNeedsReview: z.boolean().default(false),
-  archiveAfterDays: z.number().int().min(1).max(365).default(30),
+  // Retained as the fallback for settings created before terminal rules were independent.
+  archiveAfterDays: archiveDaysSchema.default(30),
+  archiveCanceledEnabled: z.boolean().default(false),
+  archiveDoneEnabled: z.boolean().default(false),
+  archiveCanceledAfterDays: archiveDaysSchema.nullable().default(null),
+  archiveDoneAfterDays: archiveDaysSchema.nullable().default(null),
   defaultDraftGroup: stageSchema.nullable().default(null),
   defaultStartGroup: stageSchema.nullable().default(null),
   defaultStartWorkGroup: stageSchema.nullable().default(null),
   pinInProgressWorkspaces: z.boolean().default(true),
+  exclusiveStatusLabels: z.boolean().default(false),
 };
 export const settingsSchema = z.object({
   ...preferences,
@@ -226,10 +232,53 @@ export function resolveStage(
     ? "conflict"
     : (found[0]?.id ?? defaultWorkspaceGroup(groups, configured));
 }
+/** The enabled delay for a terminal group kind, or null when its rule is off. */
+export function archiveDelayFor(
+  settings: Pick<
+    Settings,
+    | "archiveAfterDays"
+    | "archiveCanceledEnabled"
+    | "archiveCanceledAfterDays"
+    | "archiveDoneEnabled"
+    | "archiveDoneAfterDays"
+  >,
+  stage: string | undefined,
+): number | null {
+  if (stage === "canceled")
+    return settings.archiveCanceledEnabled
+      ? (settings.archiveCanceledAfterDays ?? settings.archiveAfterDays)
+      : null;
+  if (stage === "done")
+    return settings.archiveDoneEnabled
+      ? (settings.archiveDoneAfterDays ?? settings.archiveAfterDays)
+      : null;
+  return null;
+}
+/**
+ * The one status label an exclusive conflict can attribute to the most recent external
+ * change: every managed label except the task's previous stage's label. Any other shape
+ * (the previous label already gone, two newcomers, an unknown previous stage) stays a
+ * manual conflict, because the newest label cannot be told apart from the rest.
+ */
+export function newestConflictStage(
+  previous: Stage,
+  labels: readonly string[],
+  groups: readonly Group[],
+): Stage | undefined {
+  const prior = groups.find((group) => group.id === previous);
+  if (!prior) return undefined;
+  const newcomer = statusLabels(labels, groups).filter(
+    (label) => labelKey(label) !== labelKey(prior.label),
+  );
+  if (newcomer.length !== 1) return undefined;
+  return groups.find((group) => labelKey(group.label) === labelKey(newcomer[0]))
+    ?.id;
+}
 export function archiveDueAt(
   conversation: string | null,
-  days = 30,
+  days: number | null = 30,
 ): string | null {
+  if (days === null) return null;
   const time = conversation === null ? NaN : Date.parse(conversation);
   return Number.isFinite(time)
     ? new Date(time + days * DAY_MS).toISOString()
@@ -239,7 +288,7 @@ export function isArchiveDue(
   stage: string | undefined,
   conversation: string | null,
   now: number,
-  days = 30,
+  days: number | null = 30,
 ): boolean {
   const due = archiveDueAt(conversation, days);
   return (
@@ -269,7 +318,7 @@ export function conversationStatusFor(
  * The stored settings version. The plugin registers this same value, because the host only
  * migrates stored settings when the registered version differs from what it finds.
  */
-export const DATA_SCHEMA_VERSION = 8;
+export const DATA_SCHEMA_VERSION = 9;
 
 export const sourceSchema = z.discriminatedUnion("kind", [
   z.object({
@@ -348,10 +397,17 @@ export const taskSchema = z.object({
   updatedAt: z.string(),
   draftStage: stageSchema,
   lastStage: z.union([stageSchema, z.literal("conflict")]),
+  /**
+   * The most recent non-conflict stage the plugin observed. Newest-wins attribution reads
+   * this instead of lastStage, because lastStage is persisted as "conflict" and would
+   * otherwise make every conflict unattributable forever after one failed or pre-setting
+   * sync.
+   */
+  resolvedStage: stageSchema.nullable().default(null),
   lastConversationAt: z.string().nullable(),
   conversationStatus: z.enum(["known", "none", "unknown"]),
   conversationDisplayEvidence: conversationDisplaySchema.default("unknown"),
-  // Paseo's recorded activity: never later than the real last message, but polluted for
+  // Paseo's recorded activity: never earlier than the real last message, but polluted for
   // archived agents, whose updatedAt lands on the archive time instead.
   conversationGateAt: z.string().nullable().default(null),
   conversationGateEvidence: conversationGateSchema.default("unknown"),
@@ -427,6 +483,9 @@ export const activitySchema = z.enum([
   "attention",
   "error",
 ]);
+/** Running and waiting agents hold a provider process; everything else is at rest. */
+export const isActiveActivity = (activity: z.infer<typeof activitySchema>) =>
+  activity === "running" || activity === "waiting";
 export const pinStateSchema = z
   .enum(["none", "automatic", "manual"])
   .default("none");
@@ -453,6 +512,12 @@ export const cardSchema = taskSchema.extend({
   activity: activitySchema,
   pinState: pinStateSchema,
   dueAt: z.string().nullable(),
+  /**
+   * Computed, never stored. When an idle parent's skipped children are the only thing keeping
+   * this workspace's archive gate unknown, the recorded time at which it would be rechecked.
+   * It schedules a recheck and never authorizes an archive.
+   */
+  recheckAt: z.string().nullable().optional(),
   agents: z.array(
     z.object({
       id: z.string(),
@@ -470,6 +535,8 @@ export const boardSchema = z.object({
   connected: z.boolean(),
   error: z.string().nullable(),
   refreshedAt: z.string().nullable(),
+  /** The server clock's offset from real time: 0, except in the marked integration home. */
+  clockOffsetMs: z.number().optional(),
   settings: settingsSchema,
   cards: z.array(cardSchema),
   cardOrderByStage: cardOrderByStageSchema,
@@ -501,6 +568,7 @@ export function newTask(
     updatedAt: now,
     draftStage: stage,
     lastStage: stage,
+    resolvedStage: null,
     lastConversationAt: null,
     conversationStatus: "none",
     conversationDisplayEvidence: "none",

@@ -37,6 +37,10 @@ Use the status menu or drag a desktop card by its handle. Moving a bound task up
 
 Board dragging starts after 6px, shows a card preview, highlights a target, and autoscrolls near the horizontal edge. Press `Esc`, leave the window, or release outside the board to cancel. Each group initially uses last activity: bound tasks use the last verified conversation, drafts use their last edit, and workspaces with no conversation stay last. Drag within a desktop column to save an order, using the vertical insertion line; the list scrolls near its top or bottom edge. Narrow layouts offer up/down controls and Alt+Up/Down. With filters, the chosen visible neighbor is an anchor: only the selected task moves, while other tasks keep their relative order. A pending reorder locks that column's ordering controls. Concurrent membership/order changes reject the request, clear its preview, and refresh the board. New cards appear at the tail in activity order. A card returning to a column keeps its saved position until another manual reorder compacts that column's current IDs. Use **Restore activity order** in the group menu to reset. Saved order is shared across clients and survives reload. Ordering does not edit task timestamps, labels, pinning, conversation evidence or archive gates; cross-column moves continue to use the status mutation and undo.
 
+For external label changes, **Exclusive status labels** in Settings is optional and off by default. When Paseo adds one new managed status label alongside the task's previously known label, Workboard can identify the new choice and remove the old managed label. Other labels remain. If the previous status is unknown or several additions make the latest choice ambiguous, Workboard keeps the conflict for manual resolution.
+
+![Move a fictional task and undo the move](../images/move-undo-en.gif)
+
 ## Use the board and list
 
 On desktop and Web, Workboard follows Paseo's language setting. Chinese and English are supported; other Paseo languages fall back to English. When Paseo follows the system language, Workboard follows the same locale selection. There is no separate plugin language setting. Built-in group names and dates change with the UI; custom group names, task titles and notes stay as entered.
@@ -44,6 +48,8 @@ On desktop and Web, Workboard follows Paseo's language setting. Chinese and Engl
 ### Read tasks
 
 Cards and list rows show task title, project, activity, and the latest conversation date. Hovering a title underlines it and explains its action: drafts open editing, bound tasks open their workspace. If navigation is unavailable, a message directs you to the Paseo workspace list. A time written as "No earlier than {date}" or "No later than {date}" means Paseo only supports a bound there: the first is the recorded last user message or the oldest rows of a partially replayed window, the second is Paseo's recorded activity. Workboard never shows Paseo's recorded activity as if it were the message time. Expand a card or row for labels, Agents, and a full PR/MR title. When Paseo supplies it, both layouts show PR/MR state, CI result, and review decision using native-style icons. List rows also keep task issues, unavailable PR/MR data, failed CI, requested changes, binding, and overdue archive warnings visible without opening details; row actions open from a separate More actions control. Workboard does not query your forge directly. A merged or closed PR/MR does not change task status.
+
+A bound workspace with no Agents and an unknown conversation time shows "No Agents" in place of the conversation time. Unknown conversation time alone does not make an agentless workspace need attention; other warnings still apply. Archive safety checks are unchanged.
 
 Cards reserve space for the drag handle only in desktop columns. Actions wrap within narrow cards, use a two-pixel gap, and highlight on hover or keyboard focus. Warning text uses the same size as card metadata.
 
@@ -59,6 +65,16 @@ In the desktop Board, groups can be reordered, resized, collapsed, colored, and 
 
 In the Board, the locate-groups button opens a group list. Selecting a desktop group expands it and scrolls to its column; on a narrow layout it selects that group. Only the Board view uses one group at a time on narrow layouts; the List view keeps all groups visible as compact rows. Active filters show a rounded count badge, distinct from the Archive count. In the narrow Board, arrow keys move between groups, and `Home` and `End` jump to the first or last group.
 
+The **Date** filter uses the displayed last conversation time. **Today** starts at local midnight; **Last 3 days** includes today and the two previous calendar days; **This week** starts Monday; **This month** starts on the first. Tasks without a conversation date do not match a date range. Date ranges filter the displayed task list; they do not alter archive eligibility.
+
+![Filters with date range options](../images/filters-en.png)
+
+![Switch between views and apply a date filter](../images/views-filter-en.gif)
+
+The grouped list below uses fictional tasks.
+
+![Grouped list](../images/list-en.png)
+
 ## Configure groups
 
 Groups have a name, type, managed label, and display color. Color is purely visual: it does not change labels, task rules, pinning, or archival. Workboard uses the same group color in column headers, card accents, status choices, narrow tabs, and group settings. All ten group colors have independent light and dark palettes. The default color family follows the native stage label color; custom colors remain visual only. Workboard reads the theme surface RGB channels from 3/6/8-digit hex or rgb/rgba (alpha does not select a backing surface). Unrecognized formats use each color's fixed light fallback. New groups recommend an unused color first, then the least-used color.
@@ -71,9 +87,27 @@ Reordering groups changes only their display order. It does not change the defau
 
 ## Archive workspaces
 
-Automatic archival is off by default. If an upgrade has to add a missing Canceled group, it also turns automatic archive off: the new managed label may match an existing workspace. Settings retain an explanation until you re-enable it; review the due-task preview and confirm before enabling when tasks are due. Upgrades that do not add that group retain your archive preference. The switch saves immediately; when tasks are already due, Workboard asks for confirmation before enabling it. Once enabled, Workboard considers only tasks in Done or Canceled groups whose last verified user or assistant conversation is strictly older than the configured delay (30 days by default; enter an integer from 1 to 365 in settings and save), measured against Paseo's recorded activity when the exact message time is unavailable. It does not use a label-change time, task edit time, tool call, or import time as conversation activity, and a displayed `≥` bound is never used to archive. When every tab of a workspace was removed, no timeline remains to read; the task's last update time then serves as an upper bound so the archive clock keeps running instead of stopping at an unknown time.
+Automatic archive is off by default. Open **Settings → Automatic archive**:
 
-Before archiving, Workboard defers when no conversation bound can be proven or the workspace has active/waiting Agents, terminals, running scripts, or unsafe or unverified Git state. It never stashes, commits, pushes, or deletes files itself.
+1. **Set waiting periods.** Each rule always shows its 1–365 day input (30 by default) and **Save** to the right. You can save a period while its rule is off; this does not enable archive.
+2. **Choose a rule.** Enable Done and/or Canceled with their independent switches. Both are off by default; enabling one does not enable the other. Toggling uses the saved period, never unsaved input.
+3. **Review due tasks.** Enabling a rule or shortening an enabled rule's period asks for confirmation if the change makes tasks due. Inspect the full candidate list with titles, status, conversation evidence, and proposed deadlines. Longer lists scroll. Confirm to save the complete proposed settings; cancel leaves the saved rules unchanged.
+
+Turning a rule off pauses it while keeping its waiting-period controls visible and editable. Its saved period and draft input remain on this settings page. Turn both off to stop automatic archive. Disabling a rule, lengthening a period, or making a change that creates no newly due tasks saves without confirmation. A task's obsolete archive warning and retry delay clear when its rule is disabled or its proven conversation time is no longer due; independent warnings remain.
+
+The candidate list uses the proposed settings and refreshes with board evidence, showing an empty state when nothing remains due. Concurrent settings changes invalidate confirmation; review a fresh proposal before saving.
+
+Upgrading from the former master switch retains each rule's effective state: if the master was off, both rules stay off; if it was on, each rule keeps its enabled state. All waiting periods are retained.
+
+A task becomes due only when its rule is enabled and its last verified user or assistant conversation is strictly older than the period. When the exact time is unavailable, a proven upper bound from Paseo's recorded activity can be used and is labeled as a conservative upper bound. Label changes, task edits, tool calls, import times, and displayed `≥` bounds are not archive evidence.
+
+When a workspace has zero Agents, the first trustworthy empty observation starts a conservative waiting period. Its displayed `≤` time is an upper bound, not the exact last conversation time. Further empty observations, task edits and label changes keep that time. An Agent appearing or an Agent/provider lifecycle event resets it, including creation and deletion between refreshes. Restart, disconnect, subscription failure or resnapshot, or an inventory read failure also restart the period from the next trustworthy empty observation. Already recorded children or unresolved child enumeration still postpone archive after the last Agent is deleted.
+
+Workboard does not read an idle Agent's history on each refresh, because Paseo would resume that Agent's provider process. An idle Agent's card shows a `≥` or `≤` bound with a note that its provider children were not listed because the Agent is idle. When such a task's recorded time is older than the period, Workboard checks it once before archiving: it lists the sub-agents and reads the idle Agent and each sub-agent. That check can load the idle Agent, and the Agent stays loaded if the task is then not archived. A failed check delays the archive and is retried with a growing wait; a recent conversation it finds postpones the next check. The confirmation shown before a rule is enabled or shortened also lists such idle tasks whose recorded time is already older than the period, because the check may archive them right afterwards. These entries say that the recorded activity is due for a recheck and that the last conversation time has not been verified; they do not show it as a conversation bound.
+
+Older settings use the former shared period for each rule until its period is edited. If an upgrade adds a missing Canceled group, automatic archive pauses because the new label may match existing workspaces; Settings explains why until you re-enable it. Other upgrades retain your archive preference.
+
+Before archiving, Workboard defers when provider children cannot be enumerated, no conversation bound can be proven, or the workspace has active/waiting Agents, terminals, running scripts, or unsafe or unverified Git state. An enumerated child also postpones archiving when its history lacks a provable upper bound; a verified empty timeline does not. An incomplete child inventory keeps archive eligibility unknown while retaining the displayed conversation time; an old parent timestamp does not prove that its children are inactive. A previously observed child disappearing from the list also blocks archive. Its last read, even an exact time, upper bound or empty history, cannot prove that no message arrived before removal. The displayed time is retained across refreshes and restarts. After subscription recovery or failure, Workboard rechecks the child inventory before allowing archive, keeping already observed children if that check fails. A failed enumeration for an active (running or waiting) parent is retried after a fixed one minute. An idle parent is not enumerated during a refresh at all; only the archive recheck lists it, and a failed recheck backs off 1, 2, 4… minutes up to one hour. It never stashes, commits, pushes, or deletes files itself.
 
 An automatic archive uses Paseo's native workspace archive. That can stop Agents and terminals and may remove a managed worktree. Success requires a native response with `error=null` and `archivedAt`, followed by a refresh in which the workspace leaves the native active list. Uncertain outcomes remain visible for manual review and are not blindly retried.
 
@@ -97,7 +131,7 @@ When stored data has an unsupported version or cannot be parsed, the board shows
 
 ## Limits and support boundaries
 
-- The plugin manifest sets the minimum Paseo version. Its internal label bridge may require changes later; see [verification](verification.md) for tested hosts.
+- The plugin manifest sets the minimum Paseo version. Its internal label bridge may require changes later; see the README installation and limitations notes for the compatibility range.
 - Local filters, view choice, separate board/list collapsed groups, and board column widths are stored per client and host; they are not shared task data.
 - Workspace labels and native archive/pin operations can change outside Workboard. The plugin rechecks state where possible, but native APIs do not provide every atomic operation.
-- Paseo 0.9.1 refuses the provider-subagent API for archived parents, and its pi provider replays history without per-row timestamps, so Workboard falls back to displayed bounds and defers only when no bound can be proven.
+- Paseo refuses the provider-subagent API for archived parents, and its pi provider replays history without per-row timestamps, so Workboard retains displayed bounds and defers automatic archive when child inventory is incomplete or conversation evidence cannot safely bound parent and child history.
