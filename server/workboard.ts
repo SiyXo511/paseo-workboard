@@ -523,6 +523,8 @@ export class Workboard {
       labels: string[];
     }> = [];
     await this.store.update((data) => {
+      const decideExclusivity = data.exclusiveStatusLabelsPending;
+      let hasStatusConflict = false;
       for (const workspace of inventory.workspaces) {
         let task = data.tasks.find((t) => t.workspaceId === workspace.id);
         const imported = !task;
@@ -551,6 +553,7 @@ export class Workboard {
           data.settings.groups,
           data.settings.defaultStartGroup,
         );
+        if (stage === "conflict") hasStatusConflict = true;
         task.lastStage = stage;
         // A clean observation refreshes the newest-wins attribution baseline; a conflict
         // must not, or one failed sync would make every later conflict unattributable.
@@ -565,6 +568,7 @@ export class Workboard {
         if (
           stage === "conflict" &&
           baseline !== null &&
+          !decideExclusivity &&
           data.settings.exclusiveStatusLabels &&
           task.workspaceId &&
           !task.binding
@@ -610,6 +614,12 @@ export class Workboard {
           this.observedIssue(task) ??
           this.archiveDeferrals.get(task.id)?.reason ??
           null;
+      }
+      if (decideExclusivity) {
+        if (connection !== this.connectionGeneration)
+          throw new Error(this.error ?? "Paseo disconnected during refresh");
+        data.settings.exclusiveStatusLabels = !hasStatusConflict;
+        data.exclusiveStatusLabelsPending = false;
       }
       for (const task of data.tasks) {
         if (

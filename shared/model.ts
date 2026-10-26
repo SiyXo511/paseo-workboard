@@ -318,7 +318,7 @@ export function conversationStatusFor(
  * The stored settings version. The plugin registers this same value, because the host only
  * migrates stored settings when the registered version differs from what it finds.
  */
-export const DATA_SCHEMA_VERSION = 9;
+export const DATA_SCHEMA_VERSION = 10;
 
 export const sourceSchema = z.discriminatedUnion("kind", [
   z.object({
@@ -444,6 +444,7 @@ export const dataSchema = z
   .object({
     schemaVersion: z.literal(DATA_SCHEMA_VERSION).default(DATA_SCHEMA_VERSION),
     revision: z.number().int().nonnegative().default(0),
+    exclusiveStatusLabelsPending: z.boolean().default(false),
     serverId: z.string().nullable().default(null),
     settings: settingsSchema.default(() => settingsSchema.parse({})),
     // Timestamp owns a native pin; null respects manual intervention for this stage.

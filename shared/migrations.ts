@@ -310,6 +310,18 @@ export class InvalidStorageDataError extends Error {
 
 function migrateDataUnsafe(values: unknown, fromVersion: number) {
   if (fromVersion === DATA_SCHEMA_VERSION) return dataSchema.parse(values);
+  if (fromVersion === 9) {
+    const previous = z
+      .object({
+        ...dataSchema.shape,
+        schemaVersion: z.literal(9).default(9),
+      })
+      .parse(values);
+    return dataSchema.parse({
+      ...previous,
+      schemaVersion: DATA_SCHEMA_VERSION,
+    });
+  }
   if (fromVersion === 8) return migrateV8(values);
   if (fromVersion === 7) return migrateV7(values);
   if (fromVersion === 6) return migrateV6(values);
@@ -342,7 +354,22 @@ function migrateDataUnsafe(values: unknown, fromVersion: number) {
 /** Paseo persists the validated migration once, retaining its revision check. */
 export function migrateData(values: unknown, fromVersion: number) {
   try {
-    return migrateDataUnsafe(values, fromVersion);
+    const migrated = migrateDataUnsafe(values, fromVersion);
+    if (fromVersion < DATA_SCHEMA_VERSION) {
+      // Inspect the raw value before schema defaults erase the missing preference.
+      const previous = z
+        .object({
+          settings: z
+            .object({ exclusiveStatusLabels: z.boolean().optional() })
+            .optional(),
+        })
+        .parse(values);
+      migrated.exclusiveStatusLabelsPending =
+        previous.settings?.exclusiveStatusLabels === undefined;
+      if (migrated.exclusiveStatusLabelsPending)
+        migrated.settings.exclusiveStatusLabels = false;
+    }
+    return migrated;
   } catch (error) {
     if (error instanceof z.ZodError) throw new InvalidStorageDataError();
     throw error;

@@ -95,6 +95,7 @@ it.each(["zh", "en"])(
     expect(migrated).toEqual({
       ...previous,
       schemaVersion: DATA_SCHEMA_VERSION,
+      exclusiveStatusLabelsPending: false,
       settings: settingsSchema.parse(settings),
       cardOrderByStage: {},
     });
@@ -381,7 +382,7 @@ it("rejects ambiguous labels or identities and missing default destinations", ()
   ).toBe(false);
 });
 
-it("migrates v6 through v9 without discarding observed agents, notes or preferences", () => {
+it("migrates v6 through the current schema without discarding observed agents, notes or preferences", () => {
   const task = {
     ...newTask("t", "Task", "2026-09-01T00:00:00Z"),
     description: "Keep notes",
@@ -471,7 +472,7 @@ it("adds a noncolliding canceled group for valid legacy settings that removed al
   }
 });
 
-it("runs the complete v1 to v9 chain with new settings and empty merge records", () => {
+it("runs the complete v1 to current schema chain with new settings and empty merge records", () => {
   const result = migrateData(
     {
       schemaVersion: 1,
@@ -492,3 +493,18 @@ it("runs the complete v1 to v9 chain with new settings and empty merge records",
   expect(result.tasks[0]).toMatchObject({ id: "legacy", mergedDrafts: [] });
   expect(result.settings.groups).toEqual(DEFAULT_GROUPS);
 });
+
+it.each([1, 2, 3, 4, 5, 6, 7, 8, 9])(
+  "defers a missing exclusivity preference from schema %s without overriding saved choices",
+  (schemaVersion) => {
+    for (const choice of [undefined, false, true]) {
+      const migrated = migrateData(
+        { schemaVersion, settings: { exclusiveStatusLabels: choice } },
+        schemaVersion,
+      );
+      expect(migrated.exclusiveStatusLabelsPending).toBe(choice === undefined);
+      expect(migrated.settings.exclusiveStatusLabels).toBe(choice ?? false);
+      expect(migrateData(migrated, DATA_SCHEMA_VERSION)).toEqual(migrated);
+    }
+  },
+);
