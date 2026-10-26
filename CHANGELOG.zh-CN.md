@@ -6,7 +6,7 @@ English: [English](CHANGELOG.md)
 
 ## Unreleased
 
-- 当同一 workspace 已出现更新的健康活动时，不再把历史 Agent 错误显示为当前状态。
+- 仅在同一 workspace 的健康 Agent 收到更新的用户消息后，忽略 idle Agent 遗留的 `lastError`。真实 Agent 失败和失败的 provider child 继续显示；元数据修改不作为恢复依据。
 
 ## 0.3.0 — 2026-10-13
 

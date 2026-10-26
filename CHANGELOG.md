@@ -6,7 +6,7 @@ All notable changes are documented here.
 
 ## Unreleased
 
-- Ignore historical Agent errors when newer healthy activity exists in the same workspace.
+- Ignore an idle Agent's leftover `lastError` only after a newer user message to a healthy Agent in the same workspace. Keep current Agent failures and failed provider children visible; metadata edits do not count as recovery.
 
 ## 0.3.0 — 2026-10-13
 

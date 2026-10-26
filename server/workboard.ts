@@ -68,19 +68,24 @@ const sameOrder = (left: readonly string[], right: readonly string[]) =>
   left.every((value, index) => value === right[index]);
 const hidden = (task: Task) =>
   task.archived?.status === "archived" || task.archived?.status === "external";
-/** Newer healthy activity supersedes errors from historical Agents in the same workspace. */
-function workspaceActivity(
-  agents: readonly Pick<Agent, "activity" | "updatedAt" | "archivedAt">[],
-): Card["activity"] {
+/** Only a lastError-only idle Agent can be superseded by a newer user message. */
+function workspaceActivity(agents: readonly Agent[]): Card["activity"] {
   const live = agents.filter((agent) => !agent.archivedAt);
   const healthyTimes = live
     .filter((agent) => agent.activity !== "error")
-    .map((agent) => Date.parse(agent.updatedAt))
+    .map((agent) => Date.parse(agent.lastUserMessageAt ?? ""))
     .filter(Number.isFinite);
   const newestHealthy = healthyTimes.length ? Math.max(...healthyTimes) : null;
   const activities = live
     .filter((agent) => {
-      if (agent.activity !== "error" || newestHealthy === null) return true;
+      if (
+        agent.activity !== "error" ||
+        agent.status !== "idle" ||
+        !agent.lastError ||
+        agent.attentionReason === "error" ||
+        newestHealthy === null
+      )
+        return true;
       const updated = Date.parse(agent.updatedAt);
       return !Number.isFinite(updated) || updated >= newestHealthy;
     })

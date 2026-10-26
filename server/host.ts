@@ -63,13 +63,14 @@ export type Agent = Pick<
   | "updatedAt"
   | "lastUserMessageAt"
   | "archivedAt"
-> & {
-  activity: Card["activity"];
-  parentAgentId?: string;
-  subagentId?: string;
-  /** Whether this parent's provider children could be listed in this inventory. */
-  childEnumeration?: "complete" | "refused" | "unavailable";
-};
+> &
+  Partial<Pick<PaseoAgent, "status" | "lastError" | "attentionReason">> & {
+    activity: Card["activity"];
+    parentAgentId?: string;
+    subagentId?: string;
+    /** Whether this parent's provider children could be listed in this inventory. */
+    childEnumeration?: "complete" | "refused" | "unavailable";
+  };
 /**
  * One agent's conversation evidence. Display and gate stay separate because Paseo records
  * neither a trustworthy exact time nor a single usable bound for every provider.

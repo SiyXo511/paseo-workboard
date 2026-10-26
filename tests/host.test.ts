@@ -205,6 +205,27 @@ const parentAgent = {
   requiresAttention: false,
 };
 
+it.each([
+  { status: "error", attentionReason: null },
+  { status: "idle", attentionReason: "error" },
+  { status: "idle", attentionReason: null },
+])("preserves the native error source in the inventory: %j", async (source) => {
+  const host = providerHost(
+    { ...parentAgent, ...source, lastError: "Previous turn failed" },
+    { subagents: async () => [] } as unknown as PaseoCompat,
+  );
+  try {
+    const inventory = await host.inventory();
+    expect(inventory.agents[0]).toMatchObject({
+      ...source,
+      activity: "error",
+      lastError: "Previous turn failed",
+    });
+  } finally {
+    host.dispose();
+  }
+});
+
 it("does not restore provider sessions outside active workspaces", async () => {
   const subagents = vi.fn(async () => []);
   const host = providerHost(
