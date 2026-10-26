@@ -65,20 +65,21 @@ export type Agent = Pick<
   | "updatedAt"
   | "lastUserMessageAt"
   | "archivedAt"
-> & {
-  activity: Card["activity"];
-  parentAgentId?: string;
-  subagentId?: string;
-  /**
-   * Whether this parent's provider children could be listed in this inventory. `skipped`
-   * means the parent is idle and listing was left out on purpose: Paseo loads an agent before
-   * answering a per-agent request, so a refresh must not resume it. Unlike `unavailable`, it
-   * is never retried, and only the archive recheck lists such a parent.
-   */
-  childEnumeration?: "complete" | "refused" | "unavailable" | "skipped";
-  /** A provider child of an idle, unarchived parent; reading it would load that parent. */
-  parentIdle?: boolean;
-};
+> &
+  Partial<Pick<PaseoAgent, "status" | "lastError" | "attentionReason">> & {
+    activity: Card["activity"];
+    parentAgentId?: string;
+    subagentId?: string;
+    /**
+     * Whether this parent's provider children could be listed in this inventory. `skipped`
+     * means the parent is idle and listing was left out on purpose: Paseo loads an agent before
+     * answering a per-agent request, so a refresh must not resume it. Unlike `unavailable`, it
+     * is never retried, and only the archive recheck lists such a parent.
+     */
+    childEnumeration?: "complete" | "refused" | "unavailable" | "skipped";
+    /** A provider child of an idle, unarchived parent; reading it would load that parent. */
+    parentIdle?: boolean;
+  };
 /**
  * One agent's conversation evidence. Display and gate stay separate because Paseo records
  * neither a trustworthy exact time nor a single usable bound for every provider.

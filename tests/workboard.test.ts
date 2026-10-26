@@ -243,6 +243,163 @@ it("keeps another agent's actionable status visible while a workspace is running
   }
 });
 
+it("clears only a lastError-only idle Agent after a newer user message", async () => {
+  const { board, inventory } = fixture();
+  inventory.workspaces.push(workspace("w", "Recovered", ["task:review"]));
+  const agent = {
+    title: null,
+    workspaceId: "w",
+    lastUserMessageAt: null,
+  };
+  inventory.agents.push(
+    {
+      ...agent,
+      id: "historical-error",
+      activity: "error",
+      status: "idle",
+      lastError: "Previous turn failed",
+      updatedAt: "2026-09-23T00:00:00Z",
+    },
+    {
+      ...agent,
+      id: "current-running",
+      activity: "running",
+      lastUserMessageAt: "2026-09-23T00:01:00Z",
+      updatedAt: "2026-09-23T00:01:00Z",
+    },
+  );
+  await board.start();
+  try {
+    expect(board.snapshot().cards[0].activity).toBe("running");
+    expect(board.snapshot().cards[0].agents[0].activity).toBe("error");
+
+    inventory.agents[0].updatedAt = "2026-09-23T00:02:00Z";
+    await board.refresh();
+    expect(board.snapshot().cards[0].activity).toBe("error");
+
+    inventory.agents[0].updatedAt = "2026-09-23T00:03:00Z";
+    inventory.agents[1].activity = "idle";
+    inventory.agents[1].lastUserMessageAt = "2026-09-23T00:04:00Z";
+    inventory.agents[1].updatedAt = "2026-09-23T00:04:00Z";
+    await board.refresh();
+    expect(board.snapshot().cards[0].activity).toBe("idle");
+  } finally {
+    board.dispose();
+  }
+});
+
+it.each([
+  { status: "error" as const },
+  { status: "idle" as const, attentionReason: "error" as const },
+  { parentAgentId: "parent", subagentId: "failed-child" },
+  {},
+])(
+  "keeps unresolved errors visible despite a newer worker: %j",
+  async (source) => {
+    const { board, inventory } = fixture();
+    inventory.workspaces.push(workspace("w", "Parallel", ["task:review"]));
+    const agent = { title: null, workspaceId: "w", lastUserMessageAt: null };
+    inventory.agents.push(
+      {
+        ...agent,
+        ...source,
+        id: "failed-worker",
+        activity: "error",
+        lastError: "Turn failed",
+        updatedAt: "2026-09-23T00:01:00Z",
+      },
+      {
+        ...agent,
+        id: "other-worker",
+        activity: "running",
+        lastUserMessageAt: "2026-09-23T00:02:00Z",
+        updatedAt: "2026-09-23T00:02:00Z",
+      },
+    );
+    await board.start();
+    try {
+      expect(board.snapshot().cards[0].activity).toBe("error");
+      expect(visibleCards(board.snapshot(), "all", "", true)).toHaveLength(1);
+    } finally {
+      board.dispose();
+    }
+  },
+);
+
+it("does not clear a lastError-only Agent when an old idle Agent is renamed", async () => {
+  const { board, inventory } = fixture();
+  inventory.workspaces.push(workspace("w", "Metadata", ["task:review"]));
+  const agent = { title: null, workspaceId: "w", lastUserMessageAt: null };
+  inventory.agents.push(
+    {
+      ...agent,
+      id: "historical-error",
+      activity: "error",
+      status: "idle",
+      lastError: "Previous turn failed",
+      updatedAt: "2026-09-23T00:01:00Z",
+    },
+    {
+      ...agent,
+      id: "old-idle",
+      activity: "idle",
+      lastUserMessageAt: "2026-09-23T00:00:00Z",
+      updatedAt: "2026-09-23T00:00:00Z",
+    },
+  );
+  await board.start();
+  try {
+    expect(board.snapshot().cards[0].activity).toBe("error");
+    inventory.agents[1].title = "Renamed";
+    inventory.agents[1].updatedAt = "2026-09-23T00:02:00Z";
+    await board.refresh();
+    expect(board.snapshot().cards[0].activity).toBe("error");
+    expect(visibleCards(board.snapshot(), "all", "", true)).toHaveLength(1);
+  } finally {
+    board.dispose();
+  }
+});
+
+it.each([
+  { lastUserMessageAt: null },
+  { lastUserMessageAt: "invalid" },
+  { lastUserMessageAt: "2026-09-23T00:01:00Z" },
+  {
+    lastUserMessageAt: "2026-09-23T00:02:00Z",
+    archivedAt: "2026-09-23T00:03:00Z",
+  },
+])(
+  "requires a strictly newer live user message to clear leftover errors: %j",
+  async (evidence) => {
+    const { board, inventory } = fixture();
+    inventory.workspaces.push(workspace("w", "Uncertain", ["task:review"]));
+    const agent = { title: null, workspaceId: "w", lastUserMessageAt: null };
+    inventory.agents.push(
+      {
+        ...agent,
+        id: "historical-error",
+        activity: "error",
+        status: "idle",
+        lastError: "Previous turn failed",
+        updatedAt: "2026-09-23T00:01:00Z",
+      },
+      {
+        ...agent,
+        ...evidence,
+        id: "other-worker",
+        activity: "idle",
+        updatedAt: "2026-09-23T00:04:00Z",
+      },
+    );
+    await board.start();
+    try {
+      expect(board.snapshot().cards[0].activity).toBe("error");
+    } finally {
+      board.dispose();
+    }
+  },
+);
+
 it("keeps the parent's current error visible beside a replayed idle provider child", async () => {
   const { board, inventory, host } = fixture();
   inventory.workspaces.push(

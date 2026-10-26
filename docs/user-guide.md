@@ -51,6 +51,8 @@ Cards and list rows show task title, project, activity, and the latest conversat
 
 A bound workspace with no Agents and an unknown conversation time shows "No Agents" in place of the conversation time. Unknown conversation time alone does not make an agentless workspace need attention; other warnings still apply. Archive safety checks are unchanged.
 
+Current Agent failures and failed provider subagents keep the workspace in Needs attention even while another Agent keeps working. An idle Agent's leftover error can stop determining the task's activity after a later user message to another unarchived Agent without an error. Renaming an Agent or editing its labels does not count as recovery. The original error remains visible in the expanded Agent details.
+
 Cards reserve space for the drag handle only in desktop columns. Actions wrap within narrow cards, use a two-pixel gap, and highlight on hover or keyboard focus. Warning text uses the same size as card metadata.
 
 Needs attention covers waiting, error, and unread activity; label or synchronization conflicts; conversation, archive, Git, terminal, or directory problems that need verification; and an open or draft PR/MR with failed CI or requested changes. Merged, closed, and unavailable PR/MR data never trigger attention from an older CI result. Focus, hover, or tap an explanatory icon for its reason. Touch-opened hints dismiss after about 4 seconds. Hover and focus hints remain until leaving or blurring the control, scrolling, or pressing Escape.
