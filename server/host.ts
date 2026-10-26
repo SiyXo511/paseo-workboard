@@ -192,7 +192,7 @@ export class PaseoHost implements Host {
     private api: PaseoApi,
     private compat: PaseoCompat,
     readonly identity: Host["identity"],
-    private changed: (workspaceId?: string) => void,
+    private changed: (workspaceId?: string, agentsChanged?: boolean) => void,
   ) {}
   private own(subscription: Subscription): void {
     let initial = true;
@@ -201,14 +201,14 @@ export class PaseoHost implements Host {
         if (initial) initial = false;
         else {
           this.invalidateChildren();
-          this.changed();
+          this.changed(undefined, true);
         }
       },
       update: (message) => this.update(message),
       error: () => {
         this.invalidateChildren();
         this.subscriptionsFailed = true;
-        this.changed();
+        this.changed(undefined, true);
       },
     });
     this.subscriptions.push(() => subscription.release());
@@ -234,18 +234,22 @@ export class PaseoHost implements Host {
     } else if (message.type === "agent_update") {
       const change = message.payload;
       if (change.kind === "upsert") {
+        const previousWorkspace = this.agentWorkspaces.get(change.agent.id);
+        if (previousWorkspace && previousWorkspace !== change.agent.workspaceId)
+          this.changed(previousWorkspace, true);
+        this.agentWorkspaces.set(change.agent.id, change.agent.workspaceId);
         this.agentUpdates.set(change.agent.id, {
           ...change.agent,
           activity: activity(change.agent),
         });
-        this.changed(change.agent.workspaceId);
+        this.changed(change.agent.workspaceId, true);
       } else {
         this.invalidateChildren(change.agentId);
         this.childRecords.delete(change.agentId);
         this.agentUpdates.set(change.agentId, null);
         const workspaceId = this.agentWorkspaces.get(change.agentId);
         this.agentWorkspaces.delete(change.agentId);
-        this.changed(workspaceId);
+        this.changed(workspaceId, true);
       }
     } else if (message.type === "agent.provider_subagents.update") {
       const change = message.payload;
@@ -256,7 +260,7 @@ export class PaseoHost implements Host {
       // A child change does not have to touch the parent, so the cache cannot wait for
       // the parent's updatedAt to move.
       this.invalidateChildren(parentAgentId);
-      this.changed(this.agentWorkspaces.get(parentAgentId));
+      this.changed(this.agentWorkspaces.get(parentAgentId), true);
     }
   }
   async inventory(): Promise<Inventory> {

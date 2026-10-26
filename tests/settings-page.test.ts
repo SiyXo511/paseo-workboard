@@ -1699,3 +1699,50 @@ it.each(["zh", "en"] as const)(
     expect(mutate).not.toHaveBeenCalled();
   },
 );
+
+it.each(["zh", "en"] as const)(
+  "describes a due empty workspace with a source-neutral upper bound in %s",
+  async (language) => {
+    const { Workboard } = await import("../server/workboard");
+    const test = fixture({
+      settings: settingsSchema.parse({
+        archiveDoneEnabled: false,
+        archiveDoneAfterDays: 1,
+      }),
+    });
+    test.inventory.workspaces.push(workspace("empty", "Empty", ["task:done"]));
+    let now = test.now();
+    const instance = new Workboard(test.host, test.store, () => now);
+    try {
+      await instance.start();
+      now += 2 * 86400000;
+      vi.spyOn(Date, "now").mockImplementation(() => now);
+      await instance.refresh();
+      const snapshot = instance.snapshot();
+      expect(snapshot.cards[0].conversationGateEvidence).toBe("upper-bound");
+      expect(snapshot.cards[0].agents).toEqual([]);
+      const mutate = vi.fn();
+      const localized = strings(language);
+      const toggle = findByTestId(
+        renderSettings(snapshot, mutate, localized),
+        "workboard-auto-archive-done",
+      );
+      await (toggle.props.onValueChange as (value: boolean) => Promise<void>)(
+        true,
+      );
+      const list = findByTestId(
+        renderSettings(snapshot, mutate, localized),
+        "workboard-archive-candidates",
+      );
+      expect(elementText(list)).toContain(
+        language === "en" ? "conservative upper bound" : "保守上界",
+      );
+      expect(elementText(list)).not.toContain(
+        language === "en" ? "recorded-activity" : "已记录活动时间",
+      );
+      expect(mutate).not.toHaveBeenCalled();
+    } finally {
+      instance.dispose();
+    }
+  },
+);
