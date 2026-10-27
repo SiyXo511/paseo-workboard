@@ -1581,11 +1581,11 @@ function TaskModal({
             <Pressable
               accessibilityRole="button"
               {...toggleButtonState(projectId === null)}
-              disabled={disabled || linked}
+              disabled={disabled}
               onPress={() => setProjectId(null)}
               style={[
                 styles.chip,
-                (disabled || linked) && styles.disabledControl,
+                disabled && styles.disabledControl,
                 projectId === null && {
                   backgroundColor: theme.colors.surface2,
                 },
